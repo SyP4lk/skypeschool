@@ -1,0 +1,387 @@
+/*!***************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[5].use[2]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[13].oneOf[5].use[3]!./app/Home.module.css ***!
+  \***************************************************************************************************************************************************************************************************************************************************************/
+/* Styles specific to the home page */
+
+/* Hero section with background image and overlay.  The large
+ * background image is set via CSS; we use an ::before pseudo-element
+ * to add a dark overlay for better contrast with the white text. */
+.Home_hero__HHP4x {
+  position: relative;
+  background-image: url('/hero-bg.jpg');
+  background-size: cover;
+  background-position: center;
+  padding: 6rem 0;
+  text-align: center;
+  color: #fff;
+}
+
+/* Overlay for the hero background */
+.Home_hero__HHP4x::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 0;
+}
+
+/* Ensure hero content appears above the overlay */
+.Home_hero__HHP4x > * {
+  position: relative;
+  z-index: 1;
+}
+
+.Home_heroTitle__BYrkk {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  /* Override primary colour in hero context so the text is white */
+  color: #ffffff;
+}
+
+.Home_heroSubtitle__mec5P {
+  font-size: 1.25rem;
+  margin-bottom: 2rem;
+  color: #eaeaea;
+}
+
+.Home_searchForm__sNTZY {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.Home_searchInput__NmFMo {
+  flex: 1 1 300px;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px 0 0 4px;
+  background-color: #e0dede;
+  color: #2a2d30;
+}
+
+.Home_searchButton__FbfUj {
+  flex: 0 0 auto;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  background: var(--colour-primary);
+  color: #fff;
+  border: none;
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+}
+
+.Home_heroSubtext__WAIxJ {
+  font-size: 0.9rem;
+  color: #dddddd;
+  margin-top: 1rem;
+}
+
+.Home_categories__5whd8 {
+  padding: 4rem 0;
+  background: #fff;
+}
+
+.Home_categories__5whd8 h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+  font-size: 2rem;
+}
+
+.Home_categoriesGrid__KHfYe {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 0px;
+}
+
+.Home_categoryItem__8Zft_ {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem;
+    background: #f9fafc;
+    transition: transform .2s ease-in-out, box-shadow .2s ease-in-out;
+    cursor: pointer;
+    border: 1px solid #e0dede;
+}
+
+.Home_categoryItem__8Zft_:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.Home_categoryIcon__rGZI2 {
+  font-size: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.Home_categoryTitle__c4_DP {
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.Home_features__z_TDJ {
+  padding: 4rem 0;
+  background: var(--colour-bg);
+}
+
+.Home_features__z_TDJ h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+  font-size: 2rem;
+}
+
+.Home_featuresGrid__xJOBh {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+}
+
+.Home_featureItem__F6jzo {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  background: #fff;
+  padding: 1.5rem;
+  border-radius: 8px;
+  text-align: center;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.Home_featureItem__F6jzo:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.Home_featureIcon__cS1xL {
+  font-size: 2rem;
+  margin-bottom: 0.75rem;
+  color: var(--colour-secondary);
+}
+
+.Home_featureTitle__kK3gf {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.Home_featureDescription__WvfCc {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.Home_trial__xp_yX {
+  padding: 4rem 0;
+  background: #fff;
+  text-align: center;
+}
+
+.Home_trial__xp_yX h2 {
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.Home_trial__xp_yX p {
+  font-size: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.Home_trialButtons__0PGuQ {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.Home_trialButton__FNcf0 {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.Home_trialButton__FNcf0.Home_primary__xtcDX {
+  background: var(--colour-primary);
+  color: #fff;
+}
+
+.Home_trialButton__FNcf0.Home_primary__xtcDX:hover {
+  background: #e78210;
+}
+
+.Home_trialButton__FNcf0.Home_secondary__UoJLa {
+  background: var(--colour-secondary);
+  color: #fff;
+}
+
+.Home_trialButton__FNcf0.Home_secondary__UoJLa:hover {
+  background: #1e4bb5;
+}
+
+.Home_steps__QKdia {
+  padding: 4rem 0;
+  background: var(--colour-bg);
+}
+
+.Home_steps__QKdia h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+  font-size: 2rem;
+}
+
+.Home_stepsGrid__nTqlA {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+}
+
+.Home_stepItem__XBtKZ {
+  background: #fff;
+  padding: 2rem 1.5rem;
+  border-radius: 8px;
+  text-align: center;
+  position: relative;
+}
+
+.Home_relative__imnbM{
+  display: flex;
+}
+.Home_stepNumber___wq8S {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--colour-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.Home_stepTitle__UG1QU {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.Home_stepDescription__pN_7_ {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.Home_testimonials__QV7N6 {
+  padding: 4rem 0;
+  background: #fff;
+}
+
+.Home_testimonials__QV7N6 h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+  font-size: 2rem;
+}
+
+.Home_testimonialSlider__R6LqX {
+  max-width: 700px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.Home_testimonialItem__YoRIX {
+  display: none;
+  text-align: center;
+  padding: 1.5rem;
+  background: var(--colour-bg);
+  border-radius: 8px;
+}
+
+.Home_testimonialItem__YoRIX.Home_active__xto2e {
+  display: block;
+}
+
+.Home_testimonialQuote__pIPgA {
+  font-style: italic;
+  margin-bottom: 1rem;
+}
+
+.Home_testimonialAuthor__1cn83 {
+  font-weight: 600;
+  color: var(--colour-secondary);
+}
+
+.Home_testimonialNav__9eQKk {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.Home_testimonialNavButton__smXC0 {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ccc;
+  cursor: pointer;
+}
+
+.Home_testimonialNavButton__smXC0.Home_active__xto2e {
+  background: var(--colour-secondary);
+}
+
+.Home_footer__q32pz {
+  background: #2a2d30;
+  color: #fff;
+  padding: 3rem 0;
+}
+
+.Home_footerColumns__yjG03 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.Home_footerLogo__RxCfx {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.Home_footerColumn__jeHO0 h4 {
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+}
+
+.Home_footerColumn__jeHO0 ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.Home_footerColumn__jeHO0 li {
+  margin-bottom: 0.5rem;
+}
+
+.Home_footerColumn__jeHO0 a {
+  color: #fff;
+  text-decoration: none;
+}
+
+.Home_footerColumn__jeHO0 a:hover {
+  text-decoration: underline;
+}
+
+.Home_footerBottom__EwYyq {
+  text-align: center;
+  font-size: 0.85rem;
+  color: #aaa;
+}
+
+@media (max-width: 1024px) {
+  .Home_categoriesGrid__KHfYe { grid-template-columns: repeat(3, 1fr); grid-template-rows: auto; }
+}
+@media (max-width: 640px) {
+  .Home_categoriesGrid__KHfYe { grid-template-columns: repeat(2, 1fr); }
+}
