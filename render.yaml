@@ -1,27 +1,51 @@
 services:
+  # -------- API (NestJS + Prisma) --------
   - type: web
-    name: skype-school-server
+    name: skypeschool-server
     env: node
-    nodeVersion: 20
+    plan: free
     rootDir: server
-    buildCommand: npm ci && npm run build
-    startCommand: npx prisma migrate deploy && node dist/main.js
+    buildCommand: |
+      npm ci
+      npx prisma generate --schema ../prisma/schema.prisma
+      npm run build
+    startCommand: npm run render-start
+    autoDeploy: true
     envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: NODE_ENV
+        value: production
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false" # чтобы prisma/ts были доступны и для seed
       - key: DATABASE_URL
-        sync: false
+        sync: false     # заполнишь в Dashboard (Render PostgreSQL)
       - key: JWT_SECRET
-        sync: false
-      - key: JWT_EXPIRES_IN
-        value: 7d
+        generateValue: true
       - key: ALLOWED_ORIGINS
-        value: https://skype-school-client.onrender.com
+        value: https://skypeschool-client.onrender.com
+    disk:
+      name: uploads
+      mountPath: /opt/render/project/src/server/public/uploads
+      sizeGB: 1
+
+  # -------- Client (Next.js 15) --------
   - type: web
-    name: skype-school-client
+    name: skypeschool-client
     env: node
-    nodeVersion: 20
+    plan: free
     rootDir: client
-    buildCommand: npm ci && npm run build
-    startCommand: npm run start
+    buildCommand: |
+      npm ci
+      npm run build
+    startCommand: npm start
+    autoDeploy: true
     envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: NODE_ENV
+        value: production
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
       - key: NEXT_PUBLIC_API_URL
-        value: https://skype-school-server.onrender.com/api
+        value: https://skypeschool-server.onrender.com/api
