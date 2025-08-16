@@ -22,7 +22,7 @@ import { HealthModule  } from './modules/health/health.module';
     AdminModule,
     StudentsModule,
     LessonsModule,
-    HealthController,
+    HealthModule,
   ],
 })
 export class AppModule {}
