@@ -7,7 +7,6 @@ import { join } from 'path';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Разрешённые origin'ы берём из env (через запятую)
   const allowed = (process.env.ALLOWED_ORIGINS || '')
     .split(',')
     .map((s: string) => s.trim())
@@ -15,18 +14,15 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
-      if (!origin) return cb(null, true);         // серверные запросы / health
+      if (!origin) return cb(null, true);
       cb(null, allowed.includes(origin));
     },
     credentials: true,
   });
 
   app.use(cookieParser());
-
-  // Только API
   app.setGlobalPrefix('api');
 
-  // Отдаём только /uploads как статику
   app.use(
     '/uploads',
     express.static(join(__dirname, '..', 'public', 'uploads'), {
