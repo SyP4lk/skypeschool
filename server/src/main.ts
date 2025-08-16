@@ -1,19 +1,21 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ConfigService } from './config/env';
 import * as cookieParser from 'cookie-parser';
 import * as express from 'express';
 import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const cfg = app.get(ConfigService);
 
-  // CORS под фронтовый домен (Render)
+  // Разрешённые origin'ы берём из env (через запятую)
+  const allowed = (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((s: string) => s.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true);
-      const allowed = (cfg.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+    origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
+      if (!origin) return cb(null, true);         // серверные запросы / health
       cb(null, allowed.includes(origin));
     },
     credentials: true,
@@ -21,10 +23,10 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
-  // Глобальный префикс API
+  // Только API
   app.setGlobalPrefix('api');
 
-  // Только /uploads как статика
+  // Отдаём только /uploads как статику
   app.use(
     '/uploads',
     express.static(join(__dirname, '..', 'public', 'uploads'), {
@@ -33,7 +35,6 @@ async function bootstrap() {
     }),
   );
 
-  const port = process.env.PORT || 3001;
-  await app.listen(port);
+  await app.listen(process.env.PORT || 3001);
 }
 bootstrap();
