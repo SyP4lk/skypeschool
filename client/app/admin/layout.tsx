@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import './admin.css';
 
@@ -31,37 +31,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     async function guard() {
       setReady(false);
       try {
-        const res = await fetch(`${apiBase}/auth/me`, {
-          credentials: 'include',
-          cache: 'no-store',
-        });
-
-        // Неавторизован — уводим на /login
-        if (res.status === 401) {
-          if (!aborted) router.replace('/login');
-          return;
-        }
+        const res = await fetch(`${apiBase}/auth/me`, { credentials: 'include', cache: 'no-store' });
 
         if (!res.ok) {
-          // Любая иная ошибка — на страницу логина
-          if (!aborted) router.replace('/login');
+          if (!aborted) router.replace(`/login?callback=${encodeURIComponent('/admin')}`);
           return;
         }
 
         const me: Me = await res.json();
-
         if (me?.role !== 'admin') {
-          // Авторизован, но не админ — уводим в свой кабинет
-          if (!aborted) {
-            if (me.role === 'teacher') router.replace('/teacher');
-            else router.replace('/student');
-          }
+          if (!aborted) router.replace('/');
           return;
         }
 
         if (!aborted) setReady(true);
       } catch {
-        if (!aborted) router.replace('/login');
+        if (!aborted) router.replace(`/login?callback=${encodeURIComponent('/admin')}`);
       }
     }
 
@@ -73,17 +58,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   async function logout() {
     try {
-      await fetch(`${apiBase}/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
+      await fetch(`${apiBase}/auth/logout`, { method: 'POST', credentials: 'include' });
     } finally {
       router.replace('/login');
     }
   }
 
   if (!ready) {
-    // Мини-скелет без мерцания
+    // скелетон
     return <div className="min-h-screen bg-gray-50" />;
   }
 

@@ -7,15 +7,15 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "nest build",
-    "start": "nest start",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
+    "start:dev": "nest start --watch",
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev --schema=../prisma/schema.prisma",
     "prisma:deploy": "prisma migrate deploy --schema=../prisma/schema.prisma",
-    "start:dev": "nest start --watch",
-    "render-start": "prisma migrate deploy --schema=../prisma/schema.prisma && node dist/main.js",
+    "render-start": "prisma migrate deploy --schema=../prisma/schema.prisma && node scripts/ensure-admin.cjs && node dist/main.js"
     "postinstall": "prisma generate"
   },
   "dependencies": {

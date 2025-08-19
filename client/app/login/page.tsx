@@ -14,12 +14,16 @@ export default function LoginPage() {
     setErr(null);
     const api = process.env.NEXT_PUBLIC_API_URL!;
     try {
-      const res = await fetch(`${api}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ login, password })
-      });
+       const form = new URLSearchParams();
+  form.set('login', login);
+  form.set('password', password);
+
+  const res = await fetch(`${api}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    credentials: 'include',
+   body: form.toString(),
+  });
       if (!res.ok) throw new Error(await res.text());
       try {
         const me = await fetch(`${api}/auth/me`, { credentials: 'include' });

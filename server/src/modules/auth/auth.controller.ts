@@ -10,6 +10,17 @@ import { PrismaService } from '../../prisma.service';
 export class AuthController {
   constructor(private readonly auth: AuthService, private readonly prisma: PrismaService) {}
 
+  private cookieOptions() {
+    const isProd = process.env.NODE_ENV === 'production';
+    return {
+      httpOnly: true,
+      secure: isProd,               // на Render — true
+      sameSite: isProd ? ('none' as const) : ('lax' as const),
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 дней
+    };
+  }
+
   @UseGuards(LocalAuthGuard)
   @HttpCode(200)
   @Post('login')
@@ -19,26 +30,21 @@ export class AuthController {
       login: req.user.login,
       role: req.user.role,
     });
-    const isHttps = process.env.NODE_ENV === 'production';
-    res.cookie('token', token, {
-      httpOnly: true,
-      sameSite: isHttps ? 'none' : 'lax',
-      secure: isHttps,
-      path: '/',
-      maxAge: 7 * 24 * 3600 * 1000,
-    });
+
+    res.cookie('token', token, this.cookieOptions());
+
     return { ok: true, user: { id: req.user.id, login: req.user.login, role: req.user.role } };
   }
 
-  // РЕГИСТРАЦИЯ УЧЕНИКА (исправлено)
+  // Регистрация ученика
   @Post('register-student')
   @HttpCode(200)
   async registerStudent(@Req() req: any, @Res({ passthrough: true }) res: Response) {
     const body = req.body || {};
     const login = (body.login ?? '').trim().toLowerCase();
     const password = (body.password ?? '').trim();
-    const firstName = (body.firstName ?? null);
-    const lastName = (body.lastName ?? null);
+    const firstName = body.firstName ?? null;
+    const lastName = body.lastName ?? null;
 
     if (!login || !password) throw new BadRequestException('login and password required');
 
@@ -57,21 +63,22 @@ export class AuthController {
     });
 
     const token = await this.auth.sign({ id: user.id, login: user.login, role: user.role });
-    const isHttps = process.env.NODE_ENV === 'production';
-    res.cookie('token', token, {
-      httpOnly: true,
-      sameSite: isHttps ? 'none' : 'lax',
-      secure: isHttps,
-      path: '/',
-      maxAge: 7 * 24 * 3600 * 1000,
-    });
+    res.cookie('token', token, this.cookieOptions());
+
     return { ok: true, user: { id: user.id, login: user.login, role: user.role } };
   }
 
   @Post('logout')
   @HttpCode(200)
   async logout(@Res({ passthrough: true }) res: Response) {
-    res.clearCookie('token', { path: '/' });
+    const isProd = process.env.NODE_ENV === 'production';
+    // Чистим с теми же атрибутами, иначе браузер может не удалить
+    res.clearCookie('token', {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
+      path: '/',
+    });
     return { ok: true };
   }
 

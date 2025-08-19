@@ -38,10 +38,11 @@ function Stat({ title, value, trend }: { title: string; value: string | number; 
 export default function AdminDashboard() {
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    api('/admin/overview')
-      .then((d: Overview) => {
+    api<Overview>('/admin/overview')
+      .then((d) => {
         const recentStudents = (d?.recentStudents ?? []).filter(
           (s) => !String(s.login || '').includes('__deleted__')
         );
@@ -50,6 +51,7 @@ export default function AdminDashboard() {
         );
         setData({ ...d, recentStudents, recentChanges });
       })
+      .catch((e) => setErr(e.message || 'Ошибка загрузки'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -60,6 +62,8 @@ export default function AdminDashboard() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Дашборд</h1>
       </div>
+
+      {err && <p className="text-red-600">{err}</p>}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Stat title="Уроков сегодня" value={data?.metrics.todayLessons ?? 0} />
