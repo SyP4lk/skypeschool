@@ -1,0 +1,4 @@
+// Вставьте пункт меню в client/app/admin/layout.tsx:
+/*
+  <Link href="/admin/articles">Статьи</Link>
+*/

@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../server/node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  teacher
+  student
+}
+
+enum LessonStatus {
+  planned
+  completed
+  cancelled
+}
+
+enum LessonChannel {
+  skype
+  zoom
+  whatsapp
+  telegram
+  other
+}
+
+model User {
+  id           String   @id @default(uuid())
+  login        String   @unique
+  passwordHash String
+  role         Role
+  firstName    String?
+  lastName     String?
+  tz           String   @default("Europe/Warsaw")
+  balance      Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  teacherProfile    TeacherProfile?
+  studentProfile    StudentProfile?
+  lessonsAsTeacher  Lesson[]        @relation("TeacherLessons")
+  lessonsAsStudent  Lesson[]        @relation("StudentLessons")
+
+  balanceChanges    BalanceChange[] @relation("UserBalanceChanges")
+  changesMade       BalanceChange[] @relation("AdminBalanceChanges")
+}
+
+model TeacherProfile {
+  id              String   @id @default(uuid())
+  user            User     @relation(fields: [userId], references: [id])
+  userId          String   @unique
+  photo           String?
+  aboutShort      String?
+  aboutFull       String?
+  education       String?
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  teacherSubjects TeacherSubject[]
+}
+
+model StudentProfile {
+  id     String @id @default(uuid())
+  user   User   @relation(fields: [userId], references: [id])
+  userId String @unique
+}
+
+model Category {
+  id       String   @id @default(uuid())
+  name     String
+  subjects Subject[]
+}
+
+model Subject {
+  id               String   @id @default(uuid())
+  name             String
+  slug             String   @unique
+  category         Category @relation(fields: [categoryId], references: [id])
+  categoryId       String
+  descriptionShort String?
+  descriptionFull  String?
+  benefits         Json?
+  program          Json?
+  seoTitle         String?
+  seoDescription   String?
+
+  teacherSubjects  TeacherSubject[]
+  lessons          Lesson[]
+}
+
+model TeacherSubject {
+  id        String         @id @default(uuid())
+  teacher   TeacherProfile @relation(fields: [teacherId], references: [id])
+  teacherId String
+  subject   Subject        @relation(fields: [subjectId], references: [id])
+  subjectId String
+  price     Int
+  duration  Int
+}
+model Article {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  title     String
+  content   String
+  image     String?
+  createdAt DateTime @default(now())
+}
+
+model Lesson {
+  id          String        @id @default(uuid())
+  teacher     User          @relation("TeacherLessons", fields: [teacherId], references: [id])
+  teacherId   String
+  student     User          @relation("StudentLessons", fields: [studentId], references: [id])
+  studentId   String
+  subject     Subject       @relation(fields: [subjectId], references: [id])
+  subjectId   String
+  startsAt    DateTime
+  duration    Int
+  status      LessonStatus  @default(planned)
+  channel     LessonChannel
+  channelLink String?
+  note        String?
+
+  @@index([teacherId, startsAt])
+  @@index([studentId, startsAt])
+}
+
+model BalanceChange {
+  id        String   @id @default(uuid())
+  user      User     @relation("UserBalanceChanges", fields: [userId], references: [id])
+  userId    String
+  delta     Int
+  reason    String?
+  admin     User?    @relation("AdminBalanceChanges", fields: [adminId], references: [id])
+  adminId   String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}

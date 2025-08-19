@@ -1,0 +1,12 @@
+*** app.module.ts.diff (пример)
+@@
+ import { Module } from '@nestjs/common';
++import { TrialRequestsModule } from './modules/trial-requests/trial-requests.module';
+ 
+ @Module({
+   imports: [
+     // ... существующие модули
++    TrialRequestsModule,
+   ],
+ })
+ export class AppModule {}
