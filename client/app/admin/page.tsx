@@ -1,6 +1,7 @@
-// app/admin/page.tsx
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { api } from './_lib/api';
 import { Card, CardTitle } from '@/components/ui/Card';
 
 type Overview = {
@@ -15,101 +16,100 @@ type Overview = {
   }[];
 };
 
-function fullName(u: { firstName?: string | null; lastName?: string | null; login?: string }) {
+function FullName(u: { firstName?: string | null; lastName?: string | null; login?: string }) {
   const fn = [u?.firstName, u?.lastName].filter(Boolean).join(' ').trim();
   return fn || u?.login || '—';
 }
-const fmt = (iso: string) => {
-  try { return new Date(iso).toLocaleString(); } catch { return iso; }
-};
 
-export default async function AdminPage() {
-  const api = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+function Stat({ title, value, trend }: { title: string; value: string | number; trend?: 'up' | 'down' | null }) {
+  return (
+    <div className="rounded-2xl p-4 bg-gradient-to-br from-blue-50 to-white border border-blue-100 shadow-sm">
+      <div className="text-sm text-gray-500">{title}</div>
+      <div className="mt-1 text-3xl font-semibold">{value}</div>
+      {trend && (
+        <div className={`text-xs mt-1 ${trend === 'up' ? 'text-emerald-600' : 'text-rose-600'}`}>
+          {trend === 'up' ? '▲' : '▼'} тренд
+        </div>
+      )}
+    </div>
+  );
+}
 
-  // Next 15: cookies() -> Promise
-  const cookieStore = await cookies();
-  const token = cookieStore.get('token')?.value;
+export default function AdminDashboard() {
+  const [data, setData] = useState<Overview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
 
-  // 1) Проверяем, что это админ
-  const meRes = await fetch(`${api}/auth/me`, {
-    headers: token ? { Cookie: `token=${token}` } : {},
-    cache: 'no-store',
-  });
-  if (!meRes.ok) redirect(`/login?callback=${encodeURIComponent('/admin')}`);
-  const me = await meRes.json();
-  if (me?.role !== 'admin') redirect('/');
+  useEffect(() => {
+    api<Overview>('/admin/overview')
+      .then((d) => {
+        const recentStudents = (d?.recentStudents ?? []).filter(
+          (s) => !String(s.login || '').includes('__deleted__')
+        );
+        const recentChanges = (d?.recentChanges ?? []).filter(
+          (ch) => !String(ch?.user?.login || '').includes('__deleted__')
+        );
+        setData({ ...d, recentStudents, recentChanges });
+      })
+      .catch((e) => setErr(e.message || 'Ошибка загрузки'))
+      .finally(() => setLoading(false));
+  }, []);
 
-  // 2) Грузим данные дашборда
-  const res = await fetch(`${api}/admin/overview`, {
-    headers: token ? { Cookie: `token=${token}` } : {},
-    cache: 'no-store',
-  });
-  if (!res.ok) {
-    return (
-      <main className="p-6 max-w-6xl mx-auto">
-        <h1 className="text-2xl font-bold mb-4">Дашборд</h1>
-        <p className="text-red-600">Не удалось загрузить данные админки.</p>
-      </main>
-    );
-  }
-  const d = (await res.json()) as Overview;
-  const recentStudents = (d.recentStudents ?? []).filter(s => !String(s.login || '').includes('__deleted__'));
-  const recentChanges = (d.recentChanges ?? []).filter(ch => !String(ch?.user?.login || '').includes('__deleted__'));
+  if (loading) return null;
 
   return (
-    <main className="space-y-6 p-6 max-w-6xl mx-auto">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Дашборд</h1>
       </div>
 
+      {err && <p className="text-red-600">{err}</p>}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-2xl p-4 bg-gradient-to-br from-blue-50 to-white border border-blue-100 shadow-sm">
-          <div className="text-sm text-gray-500">Уроков сегодня</div>
-          <div className="mt-1 text-3xl font-semibold">{d?.metrics?.todayLessons ?? 0}</div>
-        </div>
-        <div className="rounded-2xl p-4 bg-gradient-to-br from-blue-50 to-white border border-blue-100 shadow-sm">
-          <div className="text-sm text-gray-500">Ближайшие 7 дней</div>
-          <div className="mt-1 text-3xl font-semibold">{d?.metrics?.next7Lessons ?? 0}</div>
-        </div>
-        <div className="rounded-2xl p-4 bg-gradient-to-br from-blue-50 to-white border border-blue-100 shadow-sm">
-          <div className="text-sm text-gray-500">Отрицательные балансы</div>
-          <div className="mt-1 text-3xl font-semibold">{d?.metrics?.negativeBalances ?? 0}</div>
-        </div>
+        <Stat title="Уроков сегодня" value={data?.metrics.todayLessons ?? 0} />
+        <Stat title="Ближайшие 7 дней" value={data?.metrics.next7Lessons ?? 0} />
+        <Stat title="Отрицательные балансы" value={data?.metrics.negativeBalances ?? 0} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <Card>
           <CardTitle>Новые ученики</CardTitle>
           <ul className="divide-y">
-            {recentStudents.length > 0 ? recentStudents.map(s => (
+            {(data?.recentStudents ?? []).map((s) => (
               <li key={s.id} className="py-3 flex items-center justify-between">
-                <div className="font-medium">{fullName(s)}</div>
-                <div className="text-sm text-gray-500">{fmt(s.createdAt)}</div>
+                <div className="font-medium">{FullName(s)}</div>
+                <div className="text-sm text-gray-500">{new Date(s.createdAt).toLocaleString()}</div>
               </li>
-            )) : <li className="py-4 text-gray-500">Пока пусто</li>}
+            ))}
+            {(!data?.recentStudents || data.recentStudents.length === 0) && (
+              <li className="py-4 text-gray-500">Пока пусто</li>
+            )}
           </ul>
         </Card>
 
         <Card>
           <CardTitle>Изменения балансов</CardTitle>
           <ul className="divide-y">
-            {recentChanges.length > 0 ? recentChanges.map(ch => (
+            {(data?.recentChanges ?? []).map((ch) => (
               <li key={ch.id} className="py-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="font-medium">{fullName(ch.user)}</span>
+                    <span className="font-medium">{FullName(ch.user)}</span>
                     <span className={`ml-2 ${ch.delta >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                       {(ch.delta / 100).toFixed(2)} ₽
                     </span>
                   </div>
-                  <div className="text-sm text-gray-500">{fmt(ch.createdAt)}</div>
+                  <div className="text-sm text-gray-500">{new Date(ch.createdAt).toLocaleString()}</div>
                 </div>
                 {ch.reason ? <div className="text-sm text-gray-500 mt-1">{ch.reason}</div> : null}
               </li>
-            )) : <li className="py-4 text-gray-500">Пока пусто</li>}
+            ))}
+            {(!data?.recentChanges || data.recentChanges.length === 0) && (
+              <li className="py-4 text-gray-500">Пока пусто</li>
+            )}
           </ul>
         </Card>
       </div>
-    </main>
+    </div>
   );
 }
