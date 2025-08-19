@@ -8,6 +8,9 @@ import type { Request, Response, NextFunction } from 'express';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  // Глобальный префикс API
+  app.setGlobalPrefix('api');
+
   app.use(cookieParser());
   app.set('trust proxy', 1); // Render за прокси — нужно для secure cookies
 
@@ -17,7 +20,7 @@ async function bootstrap() {
     .filter(Boolean);
   const allowSet = new Set(allowList);
 
-  // Глобальный CORS-мидлварь — заголовки на любой ответ + корректный OPTIONS
+  // Глобальный CORS-миддлварь: ставит заголовки на любой ответ + корректный OPTIONS
   app.use((req: Request, res: Response, next: NextFunction) => {
     const origin = req.headers.origin as string | undefined;
     const ok = !origin || allowList.length === 0 || allowSet.has(origin);
@@ -36,7 +39,6 @@ async function bootstrap() {
     next();
   });
 
-  // Дополнительно (не мешает)
   app.enableCors({
     origin: allowList.length ? allowList : true,
     credentials: true,
