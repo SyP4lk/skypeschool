@@ -1,54 +1,52 @@
-'use client';
+// app/interesnye-stati/[slug]/page.tsx
+import Link from 'next/link';
 
-import { useEffect, useState } from 'react';
+type Article = {
+  id: string;
+  slug: string;
+  title: string;
+  content: string;
+  image?: string | null;
+  createdAt: string;
+};
 
-type Article = { id: string; slug: string; title: string; content: string; image?: string | null; createdAt: string };
+type Props = { params: Promise<{ slug: string }> };
 
-function formatDate(d: string) {
-  const date = new Date(d);
-  const dd = String(date.getDate()).padStart(2, '0');
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const yyyy = date.getFullYear();
-  return `${dd}.${mm}.${yyyy}`;
-}
+export default async function Page({ params }: Props) {
+  const { slug } = await params;
 
-export default function ArticlePage({ params }: { params: { slug: string } }) {
   const api = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
-  const base = api.replace(/\/api$/, '');
-  const [a, setA] = useState<Article | null>(null);
-  const [loading, setLoading] = useState(true);
+  const res = await fetch(`${api}/articles/${encodeURIComponent(slug)}`, { cache: 'no-store' });
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`${api}/articles/${params.slug}`, { cache: 'no-store' });
-        if (res.ok) {
-          const data = await res.json();
-          setA(data);
-        }
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [api, params.slug]);
+  if (!res.ok) {
+    return (
+      <main className="max-w-3xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold mb-4">Статья не найдена</h1>
+        <Link className="underline text-sm" href="/interesnye-stati">← Вернуться к списку</Link>
+      </main>
+    );
+  }
 
-  if (loading) return <main className="max-w-3xl mx-auto px-4 py-8">Загрузка…</main>;
-  if (!a) return <main className="max-w-3xl mx-auto px-4 py-8">Статья не найдена</main>;
+  const a: Article = await res.json();
+  const paragraphs = (a.content || '')
+    .split(/\r?\n\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 
-  const paragraphs = (a.content || '').split(/\n{2,}/).map((p, i) => <p key={i} className="mb-4">{p}</p>);
+  const date = new Date(a.createdAt);
+  const dateStr = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${date.getFullYear()}`;
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-2">{a.title}</h1>
-      <div className="text-sm text-gray-500 mb-6">{formatDate(a.createdAt)}</div>
-      {a.image && (
-        <div className="rounded-xl overflow-hidden mb-6 bg-[#6f9aa3]">
-          <img src={`${base}${a.image}`} alt={a.title} className="w-full h-auto object-cover" />
-        </div>
-      )}
-      <article className="prose prose-zinc max-w-none">
-        {paragraphs}
+      <h1 className="text-2xl font-bold mb-2">{a.title}</h1>
+      <div className="text-sm text-gray-500 mb-6">{dateStr}</div>
+      {a.image && <img src={a.image} alt="" className="mb-6 rounded" />}
+      <article className="space-y-4">
+        {paragraphs.map((p, i) => <p key={i}>{p}</p>)}
       </article>
+      <div className="mt-8">
+        <Link className="underline text-sm" href="/interesnye-stati">← Вернуться к списку</Link>
+      </div>
     </main>
   );
 }
