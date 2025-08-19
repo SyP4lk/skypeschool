@@ -7,8 +7,9 @@ async function fetchTeacher(id: string) {
   return r.json();
 }
 
-export default async function Page({ params }: { params: { id: string } }) {
-  const data = await fetchTeacher(params.id);
+ type Props = { params: Promise<{ id: string }> };
+ export default async function Page({ params }: Props) {
+   const { id } = await params;
 
   const name = (data?.user?.firstName || data?.user?.lastName)
     ? `${data.user.firstName ?? ''} ${data.user.lastName ?? ''}`.trim()
