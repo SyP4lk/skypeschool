@@ -1,74 +1,84 @@
-export const dynamic = 'force-dynamic';
+// app/teacher/[id]/page.tsx
+import Link from 'next/link';
 
-async function fetchTeacher(id: string) {
-  const base = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/+$/, '');
-  const r = await fetch(`${base}/teachers/${id}`, { cache: 'no-store' });
-  if (!r.ok) throw new Error('Teacher not found');
-  return r.json();
-}
+type Teacher = {
+  id: string;
+  user?: {
+    firstName?: string | null;
+    lastName?: string | null;
+    login?: string | null;
+    avatar?: string | null;
+  } | null;
+  subjects?: Array<{
+    id: string;
+    name: string;
+    price?: number | null;
+    duration?: number | null;
+  }> | null;
+  bio?: string | null;
+  photo?: string | null;
+};
 
- type Props = { params: Promise<{ id: string }> };
- export default async function Page({ params }: Props) {
-   const { id } = await params;
+type Props = { params: Promise<{ id: string }> };
 
-  const name = (data?.user?.firstName || data?.user?.lastName)
-    ? `${data.user.firstName ?? ''} ${data.user.lastName ?? ''}`.trim()
-    : (data?.user?.login ? data.user.login : 'Преподаватель');
+export default async function Page({ params }: Props) {
+  const { id } = await params;
 
-  const photo = (() => {
-    const p: string = data?.photo ?? '';
-    if (!p) return '';
-    if (p.startsWith('http')) return p;
-    if (p.startsWith('/')) return p;
-    return `/uploads/${p}`;
-  })();
+  const api = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+  const res = await fetch(`${api}/teacher/${encodeURIComponent(id)}`, { cache: 'no-store' });
+
+  if (!res.ok) {
+    return (
+      <main className="max-w-4xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold mb-4">Преподаватель не найден</h1>
+        <Link className="underline text-sm" href="/teachers">← Вернуться к списку</Link>
+      </main>
+    );
+  }
+
+  const data: Teacher = await res.json();
+
+  const name =
+    (data?.user?.firstName || data?.user?.lastName)
+      ? `${data.user?.firstName ?? ''} ${data.user?.lastName ?? ''}`.trim()
+      : (data?.user?.login ?? 'Преподаватель');
+
+  const avatar = data.photo || data.user?.avatar || null;
 
   return (
-    <div className="container mx-auto max-w-5xl px-4 py-8">
-      <h1 className="mb-6 text-3xl font-bold">{name}</h1>
-
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-[200px,1fr]">
-        <div>
-          {photo ? (
-            // Next/Image можно подключить позже; для SSR подойдёт <img>
-            <img src={photo} alt={name} className="h-[200px] w-[200px] rounded-xl object-cover" />
-          ) : (
-            <div className="h-[200px] w-[200px] rounded-xl bg-slate-100" />
-          )}
-        </div>
-
-        <div className="space-y-4">
-          {data?.aboutShort && <p className="text-lg">{data.aboutShort}</p>}
-          {data?.aboutFull && <p className="text-slate-700">{data.aboutFull}</p>}
-          {data?.education && (
-            <div className="rounded-xl border border-slate-200 p-4">
-              <div className="mb-2 font-medium">Образование</div>
-              <div className="text-slate-700">{data.education}</div>
-            </div>
-          )}
-
-          {Array.isArray(data?.teacherSubjects) && data.teacherSubjects.length > 0 && (
-            <div className="rounded-xl border border-slate-200 p-4">
-              <div className="mb-2 font-medium">Предметы и цены</div>
-              <ul className="space-y-2">
-                {data.teacherSubjects.map((ts: any) => (
-                  <li key={ts.id} className="flex items-center justify-between">
-                    <span>{ts.subject?.name ?? 'Предмет'}</span>
-                    <span className="text-slate-700">
-                      от {ts.price} ₽ <span className="text-slate-500">за {ts.duration} мин</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <button className="rounded-xl bg-blue-600 px-4 py-2 text-white">Пробный урок</button>
-            <button className="rounded-xl border border-slate-300 px-4 py-2">Записаться</button>
-          </div>
+    <main className="max-w-4xl mx-auto px-4 py-8">
+      <div className="flex items-start gap-6">
+        {avatar && (
+          // инвариант: next/image только из /public → для /uploads обычный <img>
+          <img src={avatar} alt={name} className="w-36 h-36 object-cover rounded-xl border" />
+        )}
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold">{name}</h1>
+          {data.bio && <p className="mt-3 text-gray-700 whitespace-pre-line">{data.bio}</p>}
         </div>
       </div>
-    </div>
+
+      <section className="mt-8">
+        <h2 className="text-xl font-semibold mb-3">Предметы и стоимость</h2>
+        {data.subjects && data.subjects.length > 0 ? (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {data.subjects.map((s) => (
+              <li key={s.id} className="border rounded p-3">
+                <div className="font-medium">{s.name}</div>
+                {(s.price ?? null) !== null && (s.duration ?? null) !== null && (
+                  <div className="text-sm text-gray-600">от {s.price} ₽ ({s.duration} мин)</div>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-gray-600">Информация о предметах будет добавлена позже.</p>
+        )}
+      </section>
+
+      <div className="mt-8">
+        <Link className="underline text-sm" href="/teachers">← Вернуться к списку</Link>
+      </div>
+    </main>
   );
 }
