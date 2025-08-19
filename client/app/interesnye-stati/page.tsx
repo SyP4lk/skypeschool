@@ -63,8 +63,11 @@ function Pagination({ page, pages }: { page: number; pages: number }) {
   );
 }
 
-export default async function Page({ searchParams }: { searchParams?: { page?: string } }) {
-  const page = Math.max(1, Number(searchParams?.page || 1) || 1);
+type Props = { searchParams?: Promise<{ page?: string }> };
+export default async function Page({ searchParams }: Props) {
+  const sp = (await searchParams) ?? {};
+  const page = Math.max(1, Number(sp.page || 1) || 1);
+
   const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/articles?limit=${PAGE_SIZE}&page=${page}`, {
     cache: 'no-store',
   });
