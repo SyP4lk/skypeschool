@@ -2,21 +2,23 @@
 import * as cookieParser from 'cookie-parser';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import type { Request, Response, NextFunction } from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.use(cookieParser());
   app.set('trust proxy', 1); // Render за прокси — нужно для secure cookies
 
   const allowList = (process.env.ALLOWED_ORIGINS || '')
     .split(',')
-    .map(s => s.trim())
+    .map((s) => s.trim())
     .filter(Boolean);
   const allowSet = new Set(allowList);
 
-  // Глобальный CORS-миддлвар — ставит заголовки на ЛЮБОЙ ответ (в т.ч. ошибки)
-  app.use((req, res, next) => {
+  // Глобальный CORS-мидлварь — заголовки на любой ответ + корректный OPTIONS
+  app.use((req: Request, res: Response, next: NextFunction) => {
     const origin = req.headers.origin as string | undefined;
     const ok = !origin || allowList.length === 0 || allowSet.has(origin);
 
@@ -34,12 +36,12 @@ async function bootstrap() {
     next();
   });
 
-  // Оставляем enableCors (дублирует поведение, но не мешает)
+  // Дополнительно (не мешает)
   app.enableCors({
     origin: allowList.length ? allowList : true,
     credentials: true,
-    methods: ['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
-    allowedHeaders: ['Content-Type','Authorization'],
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     optionsSuccessStatus: 204,
   });
 
