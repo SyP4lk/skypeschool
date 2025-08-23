@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import './admin.css';
 
@@ -31,22 +31,37 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     async function guard() {
       setReady(false);
       try {
-        const res = await fetch(`${apiBase}/auth/me`, { credentials: 'include', cache: 'no-store' });
+        const res = await fetch(`${apiBase}/auth/me`, {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+
+        // Неавторизован — уводим на /login
+        if (res.status === 401) {
+          if (!aborted) router.replace('/login');
+          return;
+        }
 
         if (!res.ok) {
-          if (!aborted) router.replace(`/login?callback=${encodeURIComponent('/admin')}`);
+          // Любая иная ошибка — на страницу логина
+          if (!aborted) router.replace('/login');
           return;
         }
 
         const me: Me = await res.json();
+
         if (me?.role !== 'admin') {
-          if (!aborted) router.replace('/');
+          // Авторизован, но не админ — уводим в свой кабинет
+          if (!aborted) {
+            if (me.role === 'teacher') router.replace('/teacher');
+            else router.replace('/student');
+          }
           return;
         }
 
         if (!aborted) setReady(true);
       } catch {
-        if (!aborted) router.replace(`/login?callback=${encodeURIComponent('/admin')}`);
+        if (!aborted) router.replace('/login');
       }
     }
 
@@ -58,14 +73,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   async function logout() {
     try {
-      await fetch(`${apiBase}/auth/logout`, { method: 'POST', credentials: 'include' });
+      await fetch(`${apiBase}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
     } finally {
       router.replace('/login');
     }
   }
 
   if (!ready) {
-    // скелетон
+    // Мини-скелет без мерцания
     return <div className="min-h-screen bg-gray-50" />;
   }
 
@@ -86,12 +104,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <nav className="grid gap-1 text-sm">
           <Link href="/admin">Дашборд</Link>
           <Link href="/admin/lessons">Уроки</Link>
-          <Link href="/admin/teachers">Преподаватели</Link>
-          <Link href="/admin/students">Ученики</Link>
+          <Link href="/admin/people">Пользователи</Link>
           <Link href="/admin/subjects">Предметы</Link>
           <Link href="/admin/categories">Категории</Link>
           <Link href="/admin/finance">Финансы</Link>
           <Link href="/admin/articles">Статьи</Link>
+          <Link href="/admin/trials">Заявки</Link>
+          <Link href="/admin/support">Поддержка</Link>
         </nav>
       </aside>
 

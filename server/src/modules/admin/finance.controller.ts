@@ -16,4 +16,10 @@ export class AdminFinanceController {
     await this.prisma.balanceChange.create({ data: { userId: body.userId, delta: body.delta, reason: body.reason, adminId: body.adminId || null } });
     return { ok: true, balance: user.balance };
   }
+
+  @Roles('admin')
+  @Post('/../balance-change')
+  async balanceChange(@Body() body: { userId: string; delta: number; reason?: string }) {
+    return this.adjust({ ...body, adminId: undefined });
+  }
 }

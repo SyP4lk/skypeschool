@@ -1,44 +1,48 @@
 import { Injectable, Logger } from '@nestjs/common';
-// Вкл. почту при деплое (nodemailer) — зависимость подключим позже
-// import * as nodemailer from 'nodemailer';
+import { PrismaService } from '../../prisma.service';
+// import * as nodemailer from 'nodemailer'; // включим позже при SMTP
 
 @Injectable()
 export class TrialRequestsService {
   private readonly logger = new Logger('TrialRequests');
+  constructor(private readonly prisma: PrismaService) {}
 
   private emailEnabled() {
     return (process.env.ENABLE_EMAIL || '') === '1';
   }
 
-  async accept(payload: { name: string; phone?: string; email?: string; message?: string }) {
+  async accept(payload: {
+    name: string;
+    phone?: string;
+    email?: string;
+    subjectId?: string;
+    message?: string;
+  }) {
+    // 1) Всегда пишем в БД
+    await this.prisma.trialRequest.create({
+      data: {
+        name: payload.name,
+        contact: payload.phone || payload.email || null,
+        subjectId: payload.subjectId || null,
+        message: payload.message || null,
+      },
+    });
+
+    // 2) Отправка писем — позже
     if (!this.emailEnabled()) {
-      this.logger.log('TRIAL_REQUEST (noop): ' + JSON.stringify({ ...payload, at: new Date().toISOString() }));
+      this.logger.log(
+        'TRIAL_REQUEST (noop): ' +
+          JSON.stringify({ ...payload, at: new Date().toISOString() }),
+      );
       return { ok: true, mode: 'noop' as const };
     }
-    // Прод-режим: включим отправку при деплое
-    // const transporter = nodemailer.createTransport({
-    //   host: process.env.SMTP_HOST,
-    //   port: Number(process.env.SMTP_PORT || 587),
-    //   secure: false,
-    //   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    // });
-    // await transporter.sendMail({
-    //   from: process.env.SMTP_USER,
-    //   to: process.env.NOTIFY_EMAIL_TO,
-    //   subject: `Новая заявка на пробный урок — ${payload.name}`,
-    //   text: [
-    //     `Имя: ${payload.name}`,
-    //     `Телефон: ${payload.phone || '-'}`,
-    //     `Email: ${payload.email || '-'}`,
-    //     '',
-    //     'Сообщение:',
-    //     payload.message || '-',
-    //   ].join('\n'),
-    // });
+
+    // TODO: SMTP
     return { ok: true, mode: 'email' as const };
   }
 
+  // НУЖНО для контроллера: GET /trial-requests/status
   status() {
-    return { emailEnabled: this.emailEnabled() };
+    return { ok: true, emailEnabled: this.emailEnabled() };
   }
 }

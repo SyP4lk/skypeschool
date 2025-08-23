@@ -14,8 +14,10 @@ import { ArticlesModule } from './modules/articles/articles.module';
 
 @Module({
   imports: [
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'public'),
+     ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'public', 'uploads'),
+      serveRoot: '/uploads',
+      exclude: ['/api*'],
     }),
     AuthModule, CategoriesModule, SubjectsModule, TeachersModule, AdminModule, StudentsModule, LessonsModule, TrialRequestsModule, ArticlesModule
   ],
