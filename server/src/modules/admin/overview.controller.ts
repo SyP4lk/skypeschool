@@ -5,13 +5,13 @@ import { Roles } from '../common/roles.decorator';
 import { RolesGuard } from '../common/roles.guard';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Controller('admin/overview')
+@Controller('admin')
 export class AdminOverviewController {
   constructor(private prisma: PrismaService) {}
 
   @Roles('admin')
-  @Get()
-  async get() {
+  @Get('overview')
+  async overview() {
     const [negativeBalances, newStudents] = await this.prisma.$transaction([
       this.prisma.user.count({ where: { balance: { lt: 0 } } }),
       this.prisma.user.findMany({
