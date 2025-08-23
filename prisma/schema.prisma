@@ -99,6 +99,8 @@ model Subject {
 
   teacherSubjects  TeacherSubject[]
   lessons          Lesson[]
+  trialRequests  TrialRequest[] @relation(name: "SubjectToTrialRequests")
+
 }
 
 model TeacherSubject {
@@ -161,7 +163,7 @@ model TrialRequest {
   name      String
   contact   String?
   subjectId String?
-  subject   Subject?    @relation(fields: [subjectId], references: [id])
+  subject   Subject?    @relation(name: \"SubjectToTrialRequests\", fields: [subjectId], references: [id])
   message   String?
   status    InboxStatus @default(new)
   createdAt DateTime    @default(now())
