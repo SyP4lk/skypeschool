@@ -17,7 +17,6 @@ import Image, { StaticImageData } from 'next/image';
 import { useState } from 'react';
 import TrialRequestModal from '../components/TrialRequestModal'; 
 import Link from 'next/link';
-import Footer from '@/components/Footer';
 
 
 // Force dynamic rendering: when Next.js builds the site in export mode,
