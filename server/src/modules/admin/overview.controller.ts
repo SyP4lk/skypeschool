@@ -12,21 +12,31 @@ export class AdminOverviewController {
   @Roles('admin')
   @Get('overview')
   async overview() {
-    const [negativeBalances, newStudents] = await this.prisma.$transaction([
+    // TODO: когда появится модель Lesson/BalanceChange — заменить расчёт
+    const [negativeBalances, recentStudents] = await this.prisma.$transaction([
       this.prisma.user.count({ where: { balance: { lt: 0 } } }),
       this.prisma.user.findMany({
         where: { role: 'student' },
         orderBy: { createdAt: 'desc' },
         take: 5,
-        select: { id: true, login: true, firstName: true, lastName: true },
+        select: { id: true, login: true, firstName: true, lastName: true, createdAt: true },
       }),
     ]);
+
     return {
-      todayLessons: 0,
-      next7DaysLessons: 0,
-      negativeBalances,
-      newStudents,
-      balanceChanges: [],
+      metrics: {
+        todayLessons: 0,
+        next7Lessons: 0,
+        negativeBalances,
+      },
+      recentStudents: recentStudents.map(s => ({
+        id: s.id,
+        login: s.login,
+        firstName: s.firstName,
+        lastName: s.lastName,
+        createdAt: s.createdAt.toISOString?.() ?? (s as any).createdAt,
+      })),
+      recentChanges: [],
     };
   }
 }
