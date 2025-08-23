@@ -63,10 +63,20 @@ model TeacherProfile {
 }
 
 model StudentProfile {
-  id     String @id @default(uuid())
-  user   User   @relation(fields: [userId], references: [id])
-  userId String @unique
+  id              String @id @default(uuid())
+  user            User   @relation(fields: [userId], references: [id])
+  userId          String @unique
+
+  // contacts & avatar for admin UI
+  avatar          String?
+  contactSkype    String?
+  contactVk       String?
+  contactGoogle   String?
+  contactWhatsapp String?
+  contactMax      String?
+  contactDiscord  String?
 }
+
 
 model Category {
   id       String   @id @default(uuid())
@@ -139,4 +149,33 @@ model BalanceChange {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+enum InboxStatus {
+  new
+  processed
+}
+
+model TrialRequest {
+  id        String      @id @default(uuid())
+  name      String
+  contact   String?
+  subjectId String?
+  subject   Subject?    @relation(fields: [subjectId], references: [id])
+  message   String?
+  status    InboxStatus @default(new)
+  createdAt DateTime    @default(now())
+
+  @@index([status, createdAt])
+}
+
+model SupportMessage {
+  id        String      @id @default(uuid())
+  fromLogin String?
+  contact   String?
+  message   String
+  status    InboxStatus @default(new)
+  createdAt DateTime    @default(now())
+
+  @@index([status, createdAt])
 }
