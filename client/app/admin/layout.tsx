@@ -103,7 +103,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         <nav className="grid gap-1 text-sm">
           <Link href="/admin">Дашборд</Link>
-          <Link href="/admin/lessons">Уроки</Link>
           <Link href="/admin/people">Пользователи</Link>
           <Link href="/admin/subjects">Предметы</Link>
           <Link href="/admin/categories">Категории</Link>

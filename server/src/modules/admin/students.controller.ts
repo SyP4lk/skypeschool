@@ -2,6 +2,8 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -26,7 +28,6 @@ function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-// ВАЖНО: типы у параметров destination/filename — снимают TS7006
 const storage = multer.diskStorage({
   destination: (
     _req: Request,
@@ -59,6 +60,30 @@ const storage = multer.diskStorage({
 @Controller('admin/students')
 export class AdminStudentsController {
   constructor(private prisma: PrismaService) {}
+
+  // Карточка ученика: user + профиль
+  @Roles('admin')
+  @Get(':id')
+  async getOne(@Param('id') id: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id, role: 'student' },
+      select: {
+        id: true,
+        login: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        balance: true,
+      },
+    });
+    if (!user) throw new NotFoundException('student not found');
+
+    const profile = await this.prisma.studentProfile.findUnique({
+      where: { userId: id },
+    });
+
+    return { user, profile };
+  }
 
   @Roles('admin')
   @Patch(':id')

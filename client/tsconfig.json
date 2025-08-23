@@ -23,7 +23,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": [
-        "./*"
+        "./app/*"
       ]
     },
     "incremental": true,
