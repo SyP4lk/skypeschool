@@ -14,6 +14,7 @@ type Row = {
   message: string;
   status: InboxStatus;
   createdAt: string;
+  _source: 'support' | 'trials';
 };
 
 export default function AdminSupportPage() {
@@ -24,6 +25,7 @@ export default function AdminSupportPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  const [readonly, setReadonly] = useState(false);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -36,36 +38,44 @@ export default function AdminSupportPage() {
   }, [items, query]);
 
   async function load() {
-    setLoading(true);
-    setErr(null);
-    setOk(null);
+    setLoading(true); setErr(null); setOk(null); setReadonly(false);
     try {
-      const qs = new URLSearchParams();
-      if (status !== 'all') qs.set('status', status);
+      const qs = new URLSearchParams(); if (status !== 'all') qs.set('status', status);
       const res = await api(`/admin/support${qs.toString() ? `?${qs}` : ''}`);
-      const list: Row[] = Array.isArray(res) ? res : (res.items || []);
-      setItems(list || []);
-      setTotal(Array.isArray(res) ? res.length : res.total ?? list.length ?? 0);
-    } catch (e: any) {
-      setErr(e?.message || String(e));
-    } finally {
-      setLoading(false);
-    }
+      const list = (Array.isArray(res) ? res : (res.items || [])).map((r: any) => ({
+        id: r.id, fromLogin: r.fromLogin || r.name || '-', contact: r.contact || r.email || r.phone || null,
+        message: r.message || r.text || '-', status: (r.status as InboxStatus) || 'new',
+        createdAt: r.createdAt, _source: 'support' as const,
+      }));
+      setItems(list); setTotal(list.length);
+    } catch (e1: any) {
+      // фолбек на заявки — read-only
+      try {
+        const qs = new URLSearchParams(); if (status !== 'all') qs.set('status', status);
+        const res = await api(`/admin/trials${qs.toString() ? `?${qs}` : ''}`);
+        const list = (Array.isArray(res) ? res : (res.items || [])).map((r: any) => ({
+          id: r.id, fromLogin: r.name || '-', contact: r.contact || r.email || r.phone || null,
+          message: r.message || '-', status: (r.status as InboxStatus) || 'new',
+          createdAt: r.createdAt, _source: 'trials' as const,
+        }));
+        setItems(list); setTotal(list.length); setReadonly(true);
+      } catch (e2: any) {
+        setErr(e2?.message || e1?.message || 'Не удалось загрузить сообщения');
+      }
+    } finally { setLoading(false); }
   }
 
   useEffect(() => { load(); }, [status]);
 
-  async function setRowStatus(id: string, next: InboxStatus) {
+  async function setRowStatus(row: Row, next: InboxStatus) {
+    if (readonly) return; // в фолбеке не меняем
     setErr(null); setOk(null);
     try {
-      await api(`/admin/support/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: next }),
-      });
+      await api(`/admin/support/${row.id}`, { method: 'PATCH', body: JSON.stringify({ status: next }) });
       setOk(next === 'processed' ? 'Помечено как обработано' : 'Вернули в «Новые»');
       await load();
     } catch (e: any) {
-      setErr(e?.message || String(e));
+      setErr(e?.message || 'Не удалось обновить статус');
     }
   }
 
@@ -85,6 +95,7 @@ export default function AdminSupportPage() {
           <button className="px-3 py-2 rounded bg-black text-white" onClick={load} type="button">Обновить</button>
 
           <span className="text-sm text-gray-500">{total} всего</span>
+          {readonly && <span className="text-xs text-gray-500">режим только чтение (нет /admin/support)</span>}
           {loading && <span className="text-sm text-gray-500">Загрузка…</span>}
           {ok && <span className="text-sm text-green-700">{ok}</span>}
           {err && <span className="text-sm text-red-600">{err}</span>}
@@ -114,10 +125,12 @@ export default function AdminSupportPage() {
                   </span>
                 </td>
                 <td className="py-2 px-3 whitespace-nowrap">
-                  {r.status === 'new' ? (
-                    <button className="text-sm px-2 py-1 rounded bg-green-600 text-white" onClick={() => setRowStatus(r.id, 'processed')}>Обработать</button>
+                  {readonly ? (
+                    <span className="text-xs text-gray-400">только чтение</span>
+                  ) : r.status === 'new' ? (
+                    <button className="text-sm px-2 py-1 rounded bg-green-600 text-white" onClick={() => setRowStatus(r, 'processed')}>Обработать</button>
                   ) : (
-                    <button className="text-sm px-2 py-1 rounded bg-gray-700 text-white" onClick={() => setRowStatus(r.id, 'new')}>В «Новые»</button>
+                    <button className="text-sm px-2 py-1 rounded bg-gray-700 text-white" onClick={() => setRowStatus(r, 'new')}>В «Новые»</button>
                   )}
                 </td>
               </tr>
