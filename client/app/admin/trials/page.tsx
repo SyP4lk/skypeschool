@@ -7,21 +7,21 @@ import Input from '@/components/ui/Input';
 import { api } from '../_lib/api';
 
 type InboxStatus = 'new' | 'processed';
-type TrialItem = {
+type Row = {
   id: string;
   name: string;
   contact?: string | null;
   message?: string | null;
   status: InboxStatus;
   createdAt: string;
-  subject?: { id: string; name: string } | null;
-  subjectId?: string | null;
+  subjectName?: string | null;
+  _source?: 'trials' | 'trial-requests';
 };
 
 export default function AdminTrialsPage() {
   const [status, setStatus] = useState<'all' | InboxStatus>('new');
   const [query, setQuery] = useState('');
-  const [items, setItems] = useState<TrialItem[]>([]);
+  const [items, setItems] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -31,43 +31,65 @@ export default function AdminTrialsPage() {
     const q = query.trim().toLowerCase();
     if (!q) return items;
     return items.filter((r) =>
-      [r.name, r.contact, r.message, r.subject?.name, r.subjectId]
+      [r.name, r.contact, r.message, r.subjectName]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q)),
     );
   }, [items, query]);
 
   async function load() {
-    setLoading(true);
-    setErr(null);
-    setOk(null);
+    setLoading(true); setErr(null); setOk(null);
     try {
-      const qs = new URLSearchParams();
-      if (status !== 'all') qs.set('status', status);
-      const res = await api(`/admin/trial-requests${qs.toString() ? `?${qs}` : ''}`);
-      const list: TrialItem[] = Array.isArray(res) ? res : (res.items || []);
-      setItems(list || []);
-      setTotal(Array.isArray(res) ? res.length : res.total ?? list.length ?? 0);
-    } catch (e: any) {
-      setErr(e?.message || String(e));
-    } finally {
-      setLoading(false);
-    }
+      const qs = new URLSearchParams(); if (status !== 'all') qs.set('status', status);
+      async function fetchList(path: string): Promise<Row[]> {
+        const res = await api(`${path}${qs.toString() ? `?${qs}` : ''}`);
+        const list = Array.isArray(res) ? res : (res.items || []);
+        return (list || []).map((r: any) => ({
+          id: r.id,
+          name: r.name || r.fromLogin || '-',
+          contact: r.contact || r.email || r.contactEmail || r.phone || r.contactPhone || null,
+          message: r.message || r.text || null,
+          status: (r.status as InboxStatus) || 'new',
+          createdAt: r.createdAt,
+          subjectName: r.subject?.name || r.subjectName || null,
+        }));
+      }
+      // основной контракт
+      let list = await fetchList('/admin/trials');
+      let source: Row['_source'] = 'trials';
+
+      // фолбек — если пусто/ошибка
+      if (!Array.isArray(list)) list = [];
+      list = list.map(r => ({ ...r, _source: source }));
+      setItems(list);
+      setTotal(list.length);
+    } catch (e1: any) {
+      try {
+        const qs = new URLSearchParams(); if (status !== 'all') qs.set('status', status);
+        const res = await api(`/admin/trial-requests${qs.toString() ? `?${qs}` : ''}`);
+        const list = (Array.isArray(res) ? res : (res.items || [])).map((r: any) => ({
+          id: r.id, name: r.name || '-', contact: r.contact || r.email || r.phone || null,
+          message: r.message || null, status: (r.status as InboxStatus) || 'new',
+          createdAt: r.createdAt, subjectName: r.subject?.name || null, _source: 'trial-requests' as const,
+        }));
+        setItems(list); setTotal(list.length);
+      } catch (e2: any) {
+        setErr(e2?.message || e1?.message || 'Не удалось загрузить список');
+      }
+    } finally { setLoading(false); }
   }
 
   useEffect(() => { load(); }, [status]);
 
-  async function setRowStatus(id: string, next: InboxStatus) {
+  async function setRowStatus(row: Row, next: InboxStatus) {
     setErr(null); setOk(null);
+    const path = row._source === 'trial-requests' ? '/admin/trial-requests' : '/admin/trials';
     try {
-      await api(`/admin/trial-requests/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: next }),
-      });
+      await api(`${path}/${row.id}`, { method: 'PATCH', body: JSON.stringify({ status: next }) });
       setOk(next === 'processed' ? 'Помечено как обработано' : 'Вернули в «Новые»');
       await load();
     } catch (e: any) {
-      setErr(e?.message || String(e));
+      setErr(e?.message || 'Не удалось обновить статус');
     }
   }
 
@@ -110,7 +132,7 @@ export default function AdminTrialsPage() {
                 <td className="py-2 px-3 whitespace-nowrap">{new Date(r.createdAt).toLocaleString('ru-RU')}</td>
                 <td className="py-2 px-3">{r.name}</td>
                 <td className="py-2 px-3">{r.contact || '—'}</td>
-                <td className="py-2 px-3">{r.subject?.name || r.subjectId || '—'}</td>
+                <td className="py-2 px-3">{r.subjectName || '—'}</td>
                 <td className="py-2 px-3 max-w-[420px]"><div className="line-clamp-3 break-words">{r.message || '—'}</div></td>
                 <td className="py-2 px-3">
                   <span className={r.status === 'new' ? 'text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-800' : 'text-xs px-2 py-1 rounded bg-green-100 text-green-800'}>
@@ -119,9 +141,9 @@ export default function AdminTrialsPage() {
                 </td>
                 <td className="py-2 px-3 whitespace-nowrap">
                   {r.status === 'new' ? (
-                    <button className="text-sm px-2 py-1 rounded bg-green-600 text-white" onClick={() => setRowStatus(r.id, 'processed')}>Обработать</button>
+                    <button className="text-sm px-2 py-1 rounded bg-green-600 text-white" onClick={() => setRowStatus(r, 'processed')}>Обработать</button>
                   ) : (
-                    <button className="text-sm px-2 py-1 rounded bg-gray-700 text-white" onClick={() => setRowStatus(r.id, 'new')}>В «Новые»</button>
+                    <button className="text-sm px-2 py-1 rounded bg-gray-700 text-white" onClick={() => setRowStatus(r, 'new')}>В «Новые»</button>
                   )}
                 </td>
               </tr>
