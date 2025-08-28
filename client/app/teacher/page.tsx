@@ -2,6 +2,10 @@
 
 import { useState } from 'react';
 import TrialRequestModal from '../components/TrialRequestModal';
+import { redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
+export default function Page() { redirect('/teachers'); }
+
 
 type TeacherSubject = { id?: string; subjectId?: string; name: string; price?: number | null; duration?: number | null };
 type TeacherProfileDTO = {

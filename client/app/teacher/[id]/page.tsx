@@ -1,5 +1,3 @@
-// app/teacher/[id]/page.tsx
-
 const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/+$/, '');
 const ORIGIN = API.replace(/\/api$/, '');
 const toAbs = (p?: string | null) => (!p ? null : p.startsWith('http') ? p : `${ORIGIN}${p.startsWith('/') ? '' : '/'}${p}`);
@@ -21,9 +19,8 @@ type TeacherDTO = {
 type Props = { params: Promise<{ id: string }> };
 
 export default async function Page({ params }: Props) {
-  const { id } = await params; // <— важное отличие
+  const { id } = await params;
 
-  // правильный эндпоинт (plural)
   const r = await fetch(`${API}/teachers/${encodeURIComponent(id)}`, { cache: 'no-store' });
   if (!r.ok) {
     return (

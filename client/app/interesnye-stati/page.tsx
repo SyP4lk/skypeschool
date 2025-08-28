@@ -39,6 +39,7 @@ function Pagination({ page, pages }: { page: number; pages: number }) {
 }
 
 type Props = { searchParams?: Promise<{ page?: string }> };
+
 export default async function Page({ searchParams }: Props) {
   const sp = (await searchParams) ?? {};
   const page = Math.max(1, Number(sp.page || 1) || 1);
@@ -52,7 +53,6 @@ export default async function Page({ searchParams }: Props) {
       </main>
     );
   }
-
   const data = (await res.json()) as ListResponse;
   const pages = Math.max(1, Math.ceil((data.total || 0) / (data.limit || PAGE_SIZE)));
 

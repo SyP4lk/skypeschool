@@ -13,7 +13,7 @@ type Row = {
   contact?: string | null;
   message: string;
   status: InboxStatus;
-  createdAt: string; // ISO
+  createdAt: string;
 };
 
 export default function AdminSupportPage() {
@@ -42,7 +42,6 @@ export default function AdminSupportPage() {
     try {
       const qs = new URLSearchParams();
       if (status !== 'all') qs.set('status', status);
-      // GET /admin/support
       const res = await api(`/admin/support${qs.toString() ? `?${qs}` : ''}`);
       const list: Row[] = Array.isArray(res) ? res : (res.items || []);
       setItems(list || []);
@@ -116,13 +115,9 @@ export default function AdminSupportPage() {
                 </td>
                 <td className="py-2 px-3 whitespace-nowrap">
                   {r.status === 'new' ? (
-                    <button className="text-sm px-2 py-1 rounded bg-green-600 text-white" onClick={() => setRowStatus(r.id, 'processed')}>
-                      Обработать
-                    </button>
+                    <button className="text-sm px-2 py-1 rounded bg-green-600 text-white" onClick={() => setRowStatus(r.id, 'processed')}>Обработать</button>
                   ) : (
-                    <button className="text-sm px-2 py-1 rounded bg-gray-700 text-white" onClick={() => setRowStatus(r.id, 'new')}>
-                      В «Новые»
-                    </button>
+                    <button className="text-sm px-2 py-1 rounded bg-gray-700 text-white" onClick={() => setRowStatus(r.id, 'new')}>В «Новые»</button>
                   )}
                 </td>
               </tr>

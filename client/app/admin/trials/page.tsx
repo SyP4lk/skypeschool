@@ -13,7 +13,7 @@ type TrialItem = {
   contact?: string | null;
   message?: string | null;
   status: InboxStatus;
-  createdAt: string; // ISO
+  createdAt: string;
   subject?: { id: string; name: string } | null;
   subjectId?: string | null;
 };
@@ -55,14 +55,10 @@ export default function AdminTrialsPage() {
     }
   }
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  useEffect(() => { load(); }, [status]);
 
   async function setRowStatus(id: string, next: InboxStatus) {
-    setErr(null);
-    setOk(null);
+    setErr(null); setOk(null);
     try {
       await api(`/admin/trial-requests/${id}`, {
         method: 'PATCH',
@@ -87,19 +83,8 @@ export default function AdminTrialsPage() {
             <option value="all">Все</option>
           </Select>
 
-          <Input
-            placeholder="Поиск (имя, контакт, сообщение, предмет)"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-
-          <button
-            className="px-3 py-2 rounded bg-black text-white"
-            onClick={load}
-            type="button"
-          >
-            Обновить
-          </button>
+          <Input placeholder="Поиск (имя, контакт, сообщение, предмет)" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <button className="px-3 py-2 rounded bg-black text-white" onClick={load} type="button">Обновить</button>
 
           <span className="text-sm text-gray-500">{total} всего</span>
           {loading && <span className="text-sm text-gray-500">Загрузка…</span>}
@@ -122,51 +107,27 @@ export default function AdminTrialsPage() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} className="border-t align-top">
-                <td className="py-2 px-3 whitespace-nowrap">
-                  {new Date(r.createdAt).toLocaleString('ru-RU')}
-                </td>
+                <td className="py-2 px-3 whitespace-nowrap">{new Date(r.createdAt).toLocaleString('ru-RU')}</td>
                 <td className="py-2 px-3">{r.name}</td>
                 <td className="py-2 px-3">{r.contact || '—'}</td>
                 <td className="py-2 px-3">{r.subject?.name || r.subjectId || '—'}</td>
-                <td className="py-2 px-3 max-w-[420px]">
-                  <div className="line-clamp-3 break-words">{r.message || '—'}</div>
-                </td>
+                <td className="py-2 px-3 max-w-[420px]"><div className="line-clamp-3 break-words">{r.message || '—'}</div></td>
                 <td className="py-2 px-3">
-                  <span
-                    className={
-                      r.status === 'new'
-                        ? 'text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-800'
-                        : 'text-xs px-2 py-1 rounded bg-green-100 text-green-800'
-                    }
-                  >
+                  <span className={r.status === 'new' ? 'text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-800' : 'text-xs px-2 py-1 rounded bg-green-100 text-green-800'}>
                     {r.status === 'new' ? 'Новая' : 'Обработана'}
                   </span>
                 </td>
                 <td className="py-2 px-3 whitespace-nowrap">
                   {r.status === 'new' ? (
-                    <button
-                      className="text-sm px-2 py-1 rounded bg-green-600 text-white"
-                      onClick={() => setRowStatus(r.id, 'processed')}
-                    >
-                      Обработать
-                    </button>
+                    <button className="text-sm px-2 py-1 rounded bg-green-600 text-white" onClick={() => setRowStatus(r.id, 'processed')}>Обработать</button>
                   ) : (
-                    <button
-                      className="text-sm px-2 py-1 rounded bg-gray-700 text-white"
-                      onClick={() => setRowStatus(r.id, 'new')}
-                    >
-                      В «Новые»
-                    </button>
+                    <button className="text-sm px-2 py-1 rounded bg-gray-700 text-white" onClick={() => setRowStatus(r.id, 'new')}>В «Новые»</button>
                   )}
                 </td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr>
-                <td className="py-4 px-3 text-gray-500" colSpan={7}>
-                  {loading ? 'Загрузка…' : 'Пока нет заявок'}
-                </td>
-              </tr>
+              <tr><td className="py-4 px-3 text-gray-500" colSpan={7}>{loading ? 'Загрузка…' : 'Пока нет заявок'}</td></tr>
             )}
           </tbody>
         </table>

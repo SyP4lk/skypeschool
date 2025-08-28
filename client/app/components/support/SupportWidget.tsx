@@ -72,7 +72,7 @@ export default function SupportWidget() {
     setText('');
 
     try {
-      const base = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/+$/, '');
+      const base = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/+$/, '');
       const payload: TrialReqPayload = { message: userMsg.text };
       if (name) payload.name = name.trim();
       if (contact) {
@@ -98,13 +98,9 @@ export default function SupportWidget() {
     }
   }, [canSend, sending, text, name, contact]);
 
-  function toggle() {
-    setOpen((v) => !v);
-  }
+  function toggle() { setOpen((v) => !v); }
 
-  const transition = prefersReduced
-    ? { duration: 0 }
-    : { type: 'spring', bounce: 0.28, duration: 0.5 };
+  const transition = prefersReduced ? { duration: 0 } : { type: 'spring', bounce: 0.28, duration: 0.5 };
 
   return (
     <div className="fixed right-4 bottom-4 z-50">
@@ -146,33 +142,15 @@ export default function SupportWidget() {
             animate={{ opacity: 1 }}
             exit={{ opacity: prefersReduced ? 0 : 0 }}
           >
-            <motion.div
-              className="px-4 py-3 border-b flex items-center justify-between bg-white"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: prefersReduced ? 0 : 0.2, delay: prefersReduced ? 0 : 0.05 }}
-            >
+            <motion.div className="px-4 py-3 border-b flex items-center justify-between bg-white" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: prefersReduced ? 0 : 0.2, delay: prefersReduced ? 0 : 0.05 }}>
               <div className="font-medium">Поддержка</div>
-              <button className="text-sm text-gray-500" onClick={toggle} aria-label="Закрыть поддержку">
-                Закрыть
-              </button>
+              <button className="text-sm text-gray-500" onClick={toggle} aria-label="Закрыть поддержку">Закрыть</button>
             </motion.div>
 
-            <motion.div
-              className="px-4 py-3 grid gap-3 overflow-y-auto"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: prefersReduced ? 0 : 0.2, delay: prefersReduced ? 0 : 0.1 }}
-            >
+            <motion.div className="px-4 py-3 grid gap-3 overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: prefersReduced ? 0 : 0.2, delay: prefersReduced ? 0 : 0.1 }}>
               {msgs.map((m) => (
                 <div key={m.id} className={m.role === 'user' ? 'text-right' : 'text-left'}>
-                  <div
-                    className={
-                      m.role === 'user'
-                        ? 'inline-block px-3 py-2 rounded-2xl bg-black text-white'
-                        : 'inline-block px-3 py-2 rounded-2xl bg-gray-100'
-                    }
-                  >
+                  <div className={m.role === 'user' ? 'inline-block px-3 py-2 rounded-2xl bg-black text-white' : 'inline-block px-3 py-2 rounded-2xl bg-gray-100'}>
                     {m.text}
                   </div>
                 </div>
@@ -180,56 +158,21 @@ export default function SupportWidget() {
               <div ref={bottomRef} />
             </motion.div>
 
-            <motion.div
-              className="px-4 pb-3 bg-white"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: prefersReduced ? 0 : 0.2, delay: prefersReduced ? 0 : 0.15 }}
-            >
+            <motion.div className="px-4 pb-3 bg-white" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: prefersReduced ? 0 : 0.2, delay: prefersReduced ? 0 : 0.15 }}>
               <div className="grid gap-2 mb-2">
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  placeholder="Как к вам обращаться (необязательно)"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  placeholder="Телефон или e-mail (для ответа)"
-                  value={contact}
-                  onChange={(e) => setContact(e.target.value)}
-                />
+                <input className="w-full border rounded px-3 py-2" placeholder="Как к вам обращаться (необязательно)" value={name} onChange={(e) => setName(e.target.value)} />
+                <input className="w-full border rounded px-3 py-2" placeholder="Телефон или e-mail (для ответа)" value={contact} onChange={(e) => setContact(e.target.value)} />
               </div>
 
               <div className="flex items-center gap-2">
-                <input
-                  ref={inputRef}
-                  className="flex-1 border rounded px-3 py-2"
-                  placeholder="Напишите сообщение…"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      send();
-                    }
-                  }}
-                />
-                <button
-                  onClick={send}
-                  disabled={!canSend || sending}
-                  className="px-3 py-2 rounded bg-black text-white disabled:opacity-60"
-                >
-                  Отправить
-                </button>
+                <input ref={inputRef} className="flex-1 border rounded px-3 py-2" placeholder="Напишите сообщение…" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
+                <button onClick={send} disabled={!canSend || sending} className="px-3 py-2 rounded bg-black text-white disabled:opacity-60">Отправить</button>
               </div>
 
               {ok && <div className="text-xs text-green-700 mt-2">{ok}</div>}
               {err && <div className="text-xs text-red-600 mt-2">{err}</div>}
 
-              <div className="text-[11px] text-gray-500 mt-2">
-                *Сейчас сообщения доставляются менеджеру. Ответ придёт на указанный контакт.
-              </div>
+              <div className="text-[11px] text-gray-500 mt-2">*Сейчас сообщения доставляются менеджеру. Ответ придёт на указанный контакт.</div>
             </motion.div>
           </motion.div>
         )}
