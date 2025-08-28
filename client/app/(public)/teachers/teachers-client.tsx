@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import TrialRequestModal from '../../components/TrialRequestModal';
 
@@ -16,43 +16,73 @@ export type TeacherProfileDTO = {
   user?: { firstName?: string | null; lastName?: string | null; login?: string | null } | null;
   teacherSubjects?: TeacherSubject[] | null;
 };
-
 type Category = { id: string; name: string };
-type Subject = { id: string; name: string; minPrice?: number | null; minDuration?: number | null };
+type Subject   = { id: string; name: string; minPrice?: number | null; minDuration?: number | null };
+
+type Init = { categoryId: string; subjectId: string; sort: string; price: string };
+
+const PRICE_OPTIONS = [
+  { v: '', label: 'Стоимость: не выбрано' },
+  { v: 'lt500', label: 'до 500 ₽' },
+  { v: 'lt1000', label: 'до 1000 ₽' },
+  { v: 'lt1500', label: 'до 1500 ₽' },
+  { v: 'lt2000', label: 'до 2000 ₽' },
+  { v: 'gte2000', label: 'от 2000 ₽' },
+];
 
 export default function TeachersClient({
-  data,
-  categories,
-  subjects,
-  initialFilters,
+  data, categories, subjects, initialFilters,
 }: {
   data: TeacherProfileDTO[];
   categories: Category[];
   subjects: Subject[];
-  initialFilters: { categoryId: string; subjectId: string; sort: string };
+  initialFilters: Init;
 }) {
   const router = useRouter();
   const pathname = usePathname();
 
   const [categoryId, setCategory] = useState(initialFilters.categoryId);
-  const [subjectId, setSubject] = useState(initialFilters.subjectId);
-  const [sort, setSort] = useState(initialFilters.sort);
+  const [subjectId, setSubject]   = useState(initialFilters.subjectId);
+  const [sort, setSort]           = useState(initialFilters.sort);
+  const [price, setPrice]         = useState(initialFilters.price);
+  const [trialOpen, setTrialOpen] = useState(false);
 
-  const submit = () => {
+  // авто-применение — обновляем URL при любых изменениях
+  useEffect(() => {
     const qs = new URLSearchParams();
     if (categoryId) qs.set('categoryId', categoryId);
-    if (subjectId) qs.set('subjectId', subjectId);
-    if (sort) qs.set('sort', sort);
+    if (subjectId)  qs.set('subjectId', subjectId);
+    if (sort)       qs.set('sort', sort);
+    if (price)      qs.set('price', price);
     router.replace(`${pathname}${qs.toString() ? `?${qs}` : ''}`);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryId, subjectId, sort, price]);
 
-  const [trialOpen, setTrialOpen] = useState(false);
+  // клиентская фильтрация по цене
+  const view = useMemo(() => {
+    const minPrice = (t: TeacherProfileDTO) => {
+      const vals = (t.teacherSubjects || []).map(s => (typeof s.price === 'number' ? s.price! : Infinity));
+      const v = Math.min(...(vals.length ? vals : [Infinity]));
+      return Number.isFinite(v) ? v : null;
+    };
+    if (!price) return data;
+    return data.filter(t => {
+      const p = minPrice(t);
+      if (p == null) return false;
+      if (price === 'lt500') return p < 500;
+      if (price === 'lt1000') return p < 1000;
+      if (price === 'lt1500') return p < 1500;
+      if (price === 'lt2000') return p < 2000;
+      if (price === 'gte2000') return p >= 2000;
+      return true;
+    });
+  }, [data, price]);
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-6">
       <h1 className="text-xl font-semibold mb-3">Найти преподавателя</h1>
 
-      {/* Фильтры */}
+      {/* фильтры */}
       <div className="flex flex-wrap gap-3 items-center rounded-lg border bg-white p-3">
         <select value={categoryId} onChange={(e) => setCategory(e.target.value)} className="h-10 rounded border px-3">
           <option value="">Все категории</option>
@@ -70,13 +100,15 @@ export default function TeachersClient({
           <option value="priceDesc">Сначала дороже</option>
         </select>
 
-        <button onClick={submit} className="ml-auto h-10 rounded bg-black px-4 text-white">Показать</button>
+        <select value={price} onChange={(e) => setPrice(e.target.value)} className="h-10 rounded border px-3">
+          {PRICE_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
+        </select>
       </div>
 
-      {/* Список */}
+      {/* список */}
       <ul className="mt-4 grid gap-6 md:grid-cols-2">
-        {data.map((t) => <TeacherCard key={t.id} t={t} onTrial={() => setTrialOpen(true)} />)}
-        {data.length === 0 && <div className="text-gray-600">Список пуст</div>}
+        {view.map((t) => <TeacherCard key={t.id} t={t} onTrial={() => setTrialOpen(true)} />)}
+        {view.length === 0 && <div className="text-gray-600">Список пуст</div>}
       </ul>
 
       <TrialRequestModal open={trialOpen} onClose={() => setTrialOpen(false)} />
@@ -85,12 +117,12 @@ export default function TeachersClient({
 }
 
 function TeacherCard({ t, onTrial }: { t: TeacherProfileDTO; onTrial: () => void }) {
-  const name = useMemo(() => {
+  const name = (() => {
     const fn = t.user?.firstName?.trim() ?? '';
     const ln = t.user?.lastName?.trim() ?? '';
     const login = t.user?.login?.trim() ?? '';
     return (fn || ln) ? `${fn} ${ln}`.trim() : (login || 'Преподаватель');
-  }, [t]);
+  })();
 
   const photoUrl = toAbs(t.photo);
   const about = t.aboutShort?.trim();
@@ -111,19 +143,31 @@ function TeacherCard({ t, onTrial }: { t: TeacherProfileDTO; onTrial: () => void
         </div>
 
         <div className="flex-1">
-          <div className="font-semibold">{name}</div>
-          {about && <div className="text-sm text-gray-600 mt-1 line-clamp-2">{about}</div>}
+          <div className="font-semibold" style={{ color: 'var(--colour-text)' }}>{name}</div>
+          {about && <div className="text-sm mt-1 line-clamp-2" style={{ color: 'var(--colour-text)' }}>{about}</div>}
 
           {chips.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
-              {chips.map((c, i) => <span key={i} className="text-xs px-2 py-1 rounded-full bg-gray-100">{c}</span>)}
+              {chips.map((c, i) => <span key={i} className="text-xs px-2 py-1 rounded-full" style={{ background: '#f1f3f5', color: 'var(--colour-text)' }}>{c}</span>)}
             </div>
           )}
 
-          <div className="mt-3 flex gap-2">
-            <a href={`/teacher/${t.id}`} className="px-3 py-1.5 rounded bg-black text-white text-sm hover:opacity-90">Страница преподавателя</a>
-            <button onClick={onTrial} className="px-3 py-1.5 rounded border text-sm hover:bg-black hover:text-white">Бесплатный урок</button>
-            {minPrice !== null && <div className="ml-auto text-sm text-gray-600">от {minPrice} ₽</div>}
+          <div className="mt-3 flex gap-2 items-center">
+            <a
+              href={`/teacher/${t.id}`}
+              className="px-3 py-1.5 rounded text-white text-sm hover:opacity-90"
+              style={{ backgroundColor: 'var(--colour-secondary)' }}
+            >
+              Страница преподавателя
+            </a>
+            <button
+              onClick={onTrial}
+              className="px-3 py-1.5 rounded border text-sm hover:opacity-90"
+              style={{ borderColor: 'var(--colour-primary)', color: 'var(--colour-primary)' }}
+            >
+              Бесплатный урок
+            </button>
+            {minPrice !== null && <div className="ml-auto text-sm" style={{ color: 'var(--colour-text)' }}>от {minPrice} ₽</div>}
           </div>
         </div>
       </div>
