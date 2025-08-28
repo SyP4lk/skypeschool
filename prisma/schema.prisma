@@ -163,7 +163,11 @@ model TrialRequest {
   name      String
   contact   String?
   subjectId String?
+<<<<<<< HEAD
   subject   Subject?    @relation(name: \"SubjectToTrialRequests\", fields: [subjectId], references: [id])
+=======
+  subject   Subject?    @relation(name: "SubjectToTrialRequests", fields: [subjectId], references: [id])
+>>>>>>> origin/main
   message   String?
   status    InboxStatus @default(new)
   createdAt DateTime    @default(now())
