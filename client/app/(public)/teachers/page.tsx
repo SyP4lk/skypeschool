@@ -1,10 +1,12 @@
 // app/(public)/teachers/page.tsx
 import TeachersClient from './teachers-client';
 
+export const dynamic = 'force-dynamic'; // форсим серверный рендер по каждому запросу
+
 const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/+$/, '');
 
 type Category = { id: string; name: string };
-type Subject   = { id: string; name: string; minPrice?: number | null; minDuration?: number | null };
+type Subject   = { id: string; name: string; categoryId?: string | null; minPrice?: number | null; minDuration?: number | null };
 type TeacherSubject = { id?: string; subjectId?: string; name: string; price?: number | null; duration?: number | null };
 type TeacherProfileDTO = {
   id: string;
@@ -38,7 +40,6 @@ export default async function Page({ searchParams }: Props) {
   const data = listRes.ok ? await listRes.json() : { items: [] };
   const items: TeacherProfileDTO[] = Array.isArray(data) ? data : (data.items || []);
 
-  // серверная сортировка — по минимальной цене
   const sorted = (() => {
     if (!sort) return items;
     const getMin = (t: TeacherProfileDTO) => {
