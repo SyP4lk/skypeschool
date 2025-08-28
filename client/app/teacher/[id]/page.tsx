@@ -18,9 +18,13 @@ type TeacherDTO = {
   }> | null;
 };
 
-export default async function TeacherPage({ params }: { params: { id: string } }) {
-  // ВАЖНО: plural endpoint
-  const r = await fetch(`${API}/teachers/${params.id}`, { cache: 'no-store' });
+type Props = { params: Promise<{ id: string }> };
+
+export default async function Page({ params }: Props) {
+  const { id } = await params; // <— важное отличие
+
+  // правильный эндпоинт (plural)
+  const r = await fetch(`${API}/teachers/${encodeURIComponent(id)}`, { cache: 'no-store' });
   if (!r.ok) {
     return (
       <main className="container py-12">
@@ -42,7 +46,6 @@ export default async function TeacherPage({ params }: { params: { id: string } }
   const avatarUrl = toAbs(data.photo);
   const about = data.aboutFull?.trim() || data.aboutShort?.trim() || '';
 
-  // нормализуем предметы: берем subject.name + price/duration
   const subjects = (data.teacherSubjects || [])
     .map((ts) => ({
       id: ts.subject?.id || ts.subjectId || '',
@@ -80,8 +83,7 @@ export default async function TeacherPage({ params }: { params: { id: string } }
               <li key={s.id} className="flex items-center justify-between rounded border px-3 py-2">
                 <span>{s.name}</span>
                 <span className="text-sm text-gray-600">
-                  {s.duration ? `${s.duration} мин` : ''}{' '}
-                  {s.price ? `· ${s.price} ₽` : ''}
+                  {s.duration ? `${s.duration} мин` : ''} {s.price ? `· ${s.price} ₽` : ''}
                 </span>
               </li>
             ))}
