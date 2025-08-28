@@ -8,14 +8,28 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AdminModule = void 0;
 const common_1 = require("@nestjs/common");
-const admin_controller_1 = require("./admin.controller");
-const finance_controller_1 = require("./finance.controller");
 const prisma_service_1 = require("../../prisma.service");
 const roles_guard_1 = require("../common/roles.guard");
+const finance_controller_1 = require("./finance.controller");
+const users_controller_1 = require("./users.controller");
+const students_controller_1 = require("./students.controller");
+const trials_controller_1 = require("./trials.controller");
+const support_controller_1 = require("./support.controller");
+const overview_controller_1 = require("./overview.controller");
 let AdminModule = class AdminModule {
 };
 exports.AdminModule = AdminModule;
 exports.AdminModule = AdminModule = __decorate([
-    (0, common_1.Module)({ controllers: [admin_controller_1.AdminController, finance_controller_1.AdminFinanceController], providers: [prisma_service_1.PrismaService, roles_guard_1.RolesGuard] })
+    (0, common_1.Module)({
+        controllers: [
+            users_controller_1.AdminUsersController,
+            students_controller_1.AdminStudentsController,
+            finance_controller_1.AdminFinanceController,
+            trials_controller_1.AdminTrialsController,
+            support_controller_1.AdminSupportController,
+            overview_controller_1.AdminOverviewController,
+        ],
+        providers: [prisma_service_1.PrismaService, roles_guard_1.RolesGuard],
+    })
 ], AdminModule);
 //# sourceMappingURL=admin.module.js.map

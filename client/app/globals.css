@@ -62,6 +62,7 @@ h6 {
   margin-right: auto;
   padding-left: 1rem;
   padding-right: 1rem;
+  position: relative;
 }
 
 /* Utility class for visually hidden text (for accessibility) */
@@ -79,4 +80,67 @@ h6 {
 
 footer {
   margin-top: auto; /* прижмёт футер вниз */
+}
+
+:root {
+  --scroll-thumb: #c9ced6;
+  --scroll-thumb-hover: #b2b8c2;
+  --scroll-track: transparent;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --scroll-thumb: #6b7280;
+    --scroll-thumb-hover: #818897;
+    --scroll-track: transparent;
+  }
+}
+
+/* WebKit-браузеры (Chrome, Edge, Safari) */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: var(--scroll-track); }
+*::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-radius: 9999px;
+  border: 2px solid var(--scroll-track);
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); }
+
+/* Firefox */
+* {
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+  scrollbar-width: thin;
+}
+
+.animated-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: .22; /* тоньше/толще фона */
+  background-image:
+    linear-gradient(to right, rgba(0,0,0,.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0,0,0,.08) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image:
+    radial-gradient(ellipse at 50% 40%, #000 50%, transparent 95%); /* мягкое исчезновение по краям */
+  animation: grid-pan 28s linear infinite;
+  will-change: transform;
+}
+@keyframes grid-pan {
+  from { transform: translate3d(0,0,0); }
+  to   { transform: translate3d(-36px,-36px,0); }
+}
+@media (prefers-color-scheme: dark) {
+  .animated-grid {
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,.10) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,.10) 1px, transparent 1px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animated-grid { animation: none; }
+}
+
+section {
+  position: relative;
 }

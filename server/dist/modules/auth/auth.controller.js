@@ -26,28 +26,31 @@ let AuthController = class AuthController {
         this.auth = auth;
         this.prisma = prisma;
     }
+    cookieOptions() {
+        const isProd = process.env.NODE_ENV === 'production';
+        return {
+            httpOnly: true,
+            secure: isProd,
+            sameSite: isProd ? 'none' : 'lax',
+            path: '/',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        };
+    }
     async login(req, res) {
         const token = await this.auth.sign({
             id: req.user.id,
             login: req.user.login,
             role: req.user.role,
         });
-        const isHttps = process.env.NODE_ENV === 'production';
-        res.cookie('token', token, {
-            httpOnly: true,
-            sameSite: isHttps ? 'none' : 'lax',
-            secure: isHttps,
-            path: '/',
-            maxAge: 7 * 24 * 3600 * 1000,
-        });
+        res.cookie('token', token, this.cookieOptions());
         return { ok: true, user: { id: req.user.id, login: req.user.login, role: req.user.role } };
     }
     async registerStudent(req, res) {
         const body = req.body || {};
         const login = (body.login ?? '').trim().toLowerCase();
         const password = (body.password ?? '').trim();
-        const firstName = (body.firstName ?? null);
-        const lastName = (body.lastName ?? null);
+        const firstName = body.firstName ?? null;
+        const lastName = body.lastName ?? null;
         if (!login || !password)
             throw new common_1.BadRequestException('login and password required');
         const exists = await this.prisma.user.findUnique({ where: { login } });
@@ -64,18 +67,17 @@ let AuthController = class AuthController {
             },
         });
         const token = await this.auth.sign({ id: user.id, login: user.login, role: user.role });
-        const isHttps = process.env.NODE_ENV === 'production';
-        res.cookie('token', token, {
-            httpOnly: true,
-            sameSite: isHttps ? 'none' : 'lax',
-            secure: isHttps,
-            path: '/',
-            maxAge: 7 * 24 * 3600 * 1000,
-        });
+        res.cookie('token', token, this.cookieOptions());
         return { ok: true, user: { id: user.id, login: user.login, role: user.role } };
     }
     async logout(res) {
-        res.clearCookie('token', { path: '/' });
+        const isProd = process.env.NODE_ENV === 'production';
+        res.clearCookie('token', {
+            httpOnly: true,
+            secure: isProd,
+            sameSite: isProd ? 'none' : 'lax',
+            path: '/',
+        });
         return { ok: true };
     }
     async me(req) {

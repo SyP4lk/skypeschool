@@ -231,3 +231,24 @@
 
   .navLink { padding: 8px 0; display: block; }
 }
+
+
+/* --- HeroUI dropdown alignment helpers --- */
+.leftNavList, .rightNavList { display: flex; align-items: center; gap: 8px; }
+.navLink { display: inline-flex; align-items: center; line-height: 1; }
+
+/* ensure header over content and consistent alignment */
+.header { z-index: 50; position: relative; }
+
+.leftNavList, .rightNavList {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+

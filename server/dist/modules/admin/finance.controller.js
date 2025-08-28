@@ -16,31 +16,44 @@ exports.AdminFinanceController = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../prisma.service");
 const jwt_guard_1 = require("../auth/jwt.guard");
-const roles_decorator_1 = require("../common/roles.decorator");
 const roles_guard_1 = require("../common/roles.guard");
+const roles_decorator_1 = require("../common/roles.decorator");
 let AdminFinanceController = class AdminFinanceController {
     prisma;
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async adjust(body) {
-        const user = await this.prisma.user.update({ where: { id: body.userId }, data: { balance: { increment: body.delta } } });
-        await this.prisma.balanceChange.create({ data: { userId: body.userId, delta: body.delta, reason: body.reason, adminId: body.adminId || null } });
-        return { ok: true, balance: user.balance };
+    async change(body) {
+        const userId = body?.userId?.trim();
+        if (!userId)
+            throw new common_1.BadRequestException('userId required');
+        const deltaNum = Number(body.delta);
+        if (!Number.isFinite(deltaNum) || !Number.isInteger(deltaNum)) {
+            throw new common_1.BadRequestException('delta must be integer (kopecks)');
+        }
+        if (deltaNum === 0) {
+            throw new common_1.BadRequestException('delta cannot be zero');
+        }
+        const user = await this.prisma.user.update({
+            where: { id: userId },
+            data: { balance: { increment: deltaNum } },
+            select: { id: true, login: true, balance: true },
+        });
+        return { userId: user.id, balance: user.balance };
     }
 };
 exports.AdminFinanceController = AdminFinanceController;
 __decorate([
     (0, roles_decorator_1.Roles)('admin'),
-    (0, common_1.Post)('adjust'),
+    (0, common_1.Post)('balance-change'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
-], AdminFinanceController.prototype, "adjust", null);
+], AdminFinanceController.prototype, "change", null);
 exports.AdminFinanceController = AdminFinanceController = __decorate([
     (0, common_1.UseGuards)(jwt_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
-    (0, common_1.Controller)('admin/finance'),
+    (0, common_1.Controller)('admin'),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService])
 ], AdminFinanceController);
 //# sourceMappingURL=finance.controller.js.map

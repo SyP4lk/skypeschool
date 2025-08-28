@@ -26,7 +26,9 @@ exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
             serve_static_1.ServeStaticModule.forRoot({
-                rootPath: (0, path_1.join)(__dirname, '..', 'public'),
+                rootPath: (0, path_1.join)(process.cwd(), 'public', 'uploads'),
+                serveRoot: '/uploads',
+                exclude: ['/api*'],
             }),
             auth_module_1.AuthModule, categories_module_1.CategoriesModule, subjects_module_1.SubjectsModule, teachers_module_1.TeachersModule, admin_module_1.AdminModule, students_module_1.StudentsModule, lessons_module_1.LessonsModule, trial_requests_module_1.TrialRequestsModule, articles_module_1.ArticlesModule
         ],

@@ -5,10 +5,10 @@ export declare class ArticlesService {
     list(page?: number, limit?: number): Promise<{
         items: {
             id: string;
+            createdAt: Date;
             slug: string;
             title: string;
             image: string | null;
-            createdAt: Date;
         }[];
         total: number;
         page: number;
@@ -16,19 +16,19 @@ export declare class ArticlesService {
     }>;
     bySlug(slug: string): Promise<{
         id: string;
+        createdAt: Date;
         slug: string;
         title: string;
         content: string;
         image: string | null;
-        createdAt: Date;
     }>;
     findById(id: string): Promise<{
         id: string;
+        createdAt: Date;
         slug: string;
         title: string;
         content: string;
         image: string | null;
-        createdAt: Date;
     } | null>;
     create(data: {
         title: string;
@@ -36,11 +36,11 @@ export declare class ArticlesService {
         image: string | null;
     }): Promise<{
         id: string;
+        createdAt: Date;
         slug: string;
         title: string;
         content: string;
         image: string | null;
-        createdAt: Date;
     }>;
     update(id: string, patch: Partial<{
         title: string;
@@ -48,11 +48,11 @@ export declare class ArticlesService {
         image: string | null;
     }>): Promise<{
         id: string;
+        createdAt: Date;
         slug: string;
         title: string;
         content: string;
         image: string | null;
-        createdAt: Date;
     }>;
     remove(id: string): Promise<void>;
     private ensureUniqueSlug;

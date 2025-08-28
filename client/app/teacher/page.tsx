@@ -1,83 +1,98 @@
 'use client';
-import { useEffect, useState } from 'react';
 
-type Lesson = {
+import { useState } from 'react';
+import TrialRequestModal from '../components/TrialRequestModal';
+
+type TeacherSubject = { id?: string; subjectId?: string; name: string; price?: number | null; duration?: number | null };
+type TeacherProfileDTO = {
   id: string;
-  startsAt: string;
-  duration: number;
-  subject: { id: string; name: string };
-  student: { id: string; firstName?: string|null; lastName?: string|null; login: string };
-  note?: string | null;
+  photo?: string | null;
+  aboutShort?: string | null;
+  user?: { firstName?: string | null; lastName?: string | null; login?: string | null } | null;
+  teacherSubjects?: TeacherSubject[] | null;
 };
 
-export default function TeacherCabinet() {
-  const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState<string | null>(null);
+const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/+$/, '');
+const ORIGIN = API.replace(/\/api$/, '');
+const toAbs = (p?: string | null) => (!p ? null : p.startsWith('http') ? p : `${ORIGIN}${p.startsWith('/') ? '' : '/'}${p}`);
 
-  const load = async () => {
-    setLoading(true);
-    const base = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/+$/, '');
-    try {
-      const r = await fetch(`${base}/lessons?teacherId=me`, { credentials: 'include', cache: 'no-store' });
-      if (r.ok) setLessons(await r.json());
-    } finally {
-      setLoading(false);
-    }
-  };
+function fullName(t: TeacherProfileDTO) {
+  const fn = t.user?.firstName?.trim() ?? '';
+  const ln = t.user?.lastName?.trim() ?? '';
+  const login = t.user?.login?.trim() ?? '';
+  if (fn || ln) return `${fn} ${ln}`.trim();
+  return login || 'Преподаватель';
+}
 
-  useEffect(() => { load(); }, []);
-
-  const saveNote = async (id: string, note: string) => {
-    setSaving(id);
-    const base = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/+$/, '');
-    try {
-      await fetch(`${base}/lessons/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ note }),
-      });
-      await load();
-    } finally {
-      setSaving(null);
-    }
-  };
+export default function TeachersClient({ data }: { data: TeacherProfileDTO[] }) {
+  const [trialOpen, setTrialOpen] = useState(false);
 
   return (
-    <main className="container mx-auto max-w-5xl px-4 py-8">
-      <h1 className="mb-6 text-2xl font-semibold">Кабинет преподавателя</h1>
-      {loading ? <div>Загрузка…</div> : (
-        <div className="space-y-3">
-          {lessons.length === 0 && <div className="text-slate-600">Пока нет назначенных уроков.</div>}
-          {lessons.map(ls => (
-            <div key={ls.id} className="rounded-xl border border-slate-200 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium">{ls.subject?.name ?? 'Урок'}</div>
-                  <div className="text-sm text-slate-600">
-                    Ученик: {ls.student?.firstName || ls.student?.lastName
-                      ? `${ls.student.firstName ?? ''} ${ls.student.lastName ?? ''}`.trim()
-                      : ls.student?.login}
+    <div className="container py-8">
+      {data.length === 0 ? (
+        <div className="text-gray-500">Не нашли преподавателей по заданным фильтрам</div>
+      ) : (
+        <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {data.map((t) => {
+            const name = fullName(t);
+            const about = t.aboutShort?.trim();
+            const subs = t.teacherSubjects ?? [];
+            const photoUrl = toAbs(t.photo);
+
+            return (
+              <li key={t.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow">
+                <div className="flex items-start gap-4">
+                  <div className="h-16 w-16 overflow-hidden rounded-full bg-slate-100">
+                    {photoUrl ? (
+                      <img
+                        src={photoUrl}
+                        alt={name}
+                        className="h-16 w-16 object-cover"
+                        width={64}
+                        height={64}
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <div className="grid h-16 w-16 place-items-center text-slate-400">👩‍🏫</div>
+                    )}
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="mb-1 text-lg font-semibold">{name}</div>
+
+                    {about && <p className="mb-2 line-clamp-2 text-sm text-slate-600">{about}</p>}
+
+                    {subs.length > 0 && (
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {subs.map((s) => (
+                          <span key={(s.id ?? s.name)} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs">
+                            {s.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <a href={`/teacher/${t.id}`} className="rounded bg-black px-3 py-1.5 text-sm text-white hover:opacity-90">
+                        Страница преподавателя
+                      </a>
+                      <button
+                        className="rounded border border-black px-3 py-1.5 text-sm hover:bg-black hover:text-white"
+                        onClick={() => setTrialOpen(true)}
+                      >
+                        Бесплатный урок
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div className="text-right text-sm text-slate-700">
-                  {(new Date(ls.startsAt)).toLocaleString()} · {ls.duration} мин
-                </div>
-              </div>
-              <div className="mt-3">
-                <label className="block text-sm mb-1">Заметка (видна только вам)</label>
-                <textarea
-                  defaultValue={ls.note ?? ''}
-                  className="w-full rounded border border-slate-300 p-2"
-                  onBlur={(e) => saveNote(ls.id, e.target.value)}
-                  disabled={saving === ls.id}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
-    </main>
+
+      <TrialRequestModal open={trialOpen} onClose={() => setTrialOpen(false)} />
+    </div>
   );
 }

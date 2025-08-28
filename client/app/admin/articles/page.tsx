@@ -42,7 +42,7 @@ export default function AdminArticlesPage() {
     <main className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Статьи</h1>
-        <Link href="/admin/articles/new" className="px-4 py-2 rounded bg-blue-600 text-white">Новая статья</Link>
+        <Link href="/admin/articles/new" className="px-4 py-2 rounded  text-white">Новая статья</Link>
       </div>
       {loading ? <div>Загрузка…</div> : (
         <table className="w-full text-sm">

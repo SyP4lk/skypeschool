@@ -1,83 +1,98 @@
 // app/teacher/[id]/page.tsx
-import Link from 'next/link';
 
-type Teacher = {
+const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/+$/, '');
+const ORIGIN = API.replace(/\/api$/, '');
+const toAbs = (p?: string | null) => (!p ? null : p.startsWith('http') ? p : `${ORIGIN}${p.startsWith('/') ? '' : '/'}${p}`);
+
+type TeacherDTO = {
   id: string;
-  user?: {
-    firstName?: string | null;
-    lastName?: string | null;
-    login?: string | null;
-    avatar?: string | null;
-  } | null;
-  subjects?: Array<{
-    id: string;
-    name: string;
+  user?: { firstName?: string | null; lastName?: string | null; login?: string | null } | null;
+  photo?: string | null;
+  aboutShort?: string | null;
+  aboutFull?: string | null;
+  teacherSubjects?: Array<{
+    subject?: { id: string; name: string } | null;
+    subjectId?: string | null;
     price?: number | null;
     duration?: number | null;
   }> | null;
-  bio?: string | null;
-  photo?: string | null;
 };
 
-type Props = { params: Promise<{ id: string }> };
-
-export default async function Page({ params }: Props) {
-  const { id } = await params;
-
-  const api = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
-  const res = await fetch(`${api}/teacher/${encodeURIComponent(id)}`, { cache: 'no-store' });
-
-  if (!res.ok) {
+export default async function TeacherPage({ params }: { params: { id: string } }) {
+  // ВАЖНО: plural endpoint
+  const r = await fetch(`${API}/teachers/${params.id}`, { cache: 'no-store' });
+  if (!r.ok) {
     return (
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-4">Преподаватель не найден</h1>
-        <Link className="underline text-sm" href="/teachers">← Вернуться к списку</Link>
+      <main className="container py-12">
+        <h1 className="text-2xl font-bold">Преподаватель не найден</h1>
+        <p className="mt-2 text-gray-600">Проверьте ссылку или вернитесь к списку преподавателей.</p>
       </main>
     );
   }
 
-  const data: Teacher = await res.json();
+  const data: TeacherDTO = await r.json();
 
-  const name =
-    (data?.user?.firstName || data?.user?.lastName)
-      ? `${data.user?.firstName ?? ''} ${data.user?.lastName ?? ''}`.trim()
-      : (data?.user?.login ?? 'Преподаватель');
+  const name = (() => {
+    const fn = data.user?.firstName?.trim() || '';
+    const ln = data.user?.lastName?.trim() || '';
+    if (fn || ln) return `${fn} ${ln}`.trim();
+    return data.user?.login || 'Преподаватель';
+  })();
 
-  const avatar = data.photo || data.user?.avatar || null;
+  const avatarUrl = toAbs(data.photo);
+  const about = data.aboutFull?.trim() || data.aboutShort?.trim() || '';
+
+  // нормализуем предметы: берем subject.name + price/duration
+  const subjects = (data.teacherSubjects || [])
+    .map((ts) => ({
+      id: ts.subject?.id || ts.subjectId || '',
+      name: ts.subject?.name || '',
+      price: typeof ts.price === 'number' ? ts.price : null,
+      duration: typeof ts.duration === 'number' ? ts.duration : null,
+    }))
+    .filter((s) => s.id && s.name);
 
   return (
-    <main className="max-w-4xl mx-auto px-4 py-8">
+    <main className="container py-8">
       <div className="flex items-start gap-6">
-        {avatar && (
-          // инвариант: next/image только из /public → для /uploads обычный <img>
-          <img src={avatar} alt={name} className="w-36 h-36 object-cover rounded-xl border" />
+        {avatarUrl && (
+          <img
+            src={avatarUrl}
+            alt={name}
+            className="h-36 w-36 rounded-xl border object-cover"
+            width={144}
+            height={144}
+            loading="lazy"
+            decoding="async"
+          />
         )}
         <div className="flex-1">
           <h1 className="text-2xl font-bold">{name}</h1>
-          {data.bio && <p className="mt-3 text-gray-700 whitespace-pre-line">{data.bio}</p>}
+          {about && <p className="mt-3 whitespace-pre-line text-gray-700">{about}</p>}
         </div>
       </div>
 
       <section className="mt-8">
-        <h2 className="text-xl font-semibold mb-3">Предметы и стоимость</h2>
-        {data.subjects && data.subjects.length > 0 ? (
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {data.subjects.map((s) => (
-              <li key={s.id} className="border rounded p-3">
-                <div className="font-medium">{s.name}</div>
-                {(s.price ?? null) !== null && (s.duration ?? null) !== null && (
-                  <div className="text-sm text-gray-600">от {s.price} ₽ ({s.duration} мин)</div>
-                )}
+        <h2 className="mb-3 text-xl font-semibold">Предметы и стоимость</h2>
+        {subjects.length > 0 ? (
+          <ul className="grid gap-2">
+            {subjects.map((s) => (
+              <li key={s.id} className="flex items-center justify-between rounded border px-3 py-2">
+                <span>{s.name}</span>
+                <span className="text-sm text-gray-600">
+                  {s.duration ? `${s.duration} мин` : ''}{' '}
+                  {s.price ? `· ${s.price} ₽` : ''}
+                </span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-gray-600">Информация о предметах будет добавлена позже.</p>
+          <div className="text-gray-500">Нет предметов</div>
         )}
       </section>
 
       <div className="mt-8">
-        <Link className="underline text-sm" href="/teachers">← Вернуться к списку</Link>
+        <a href="/teachers" className="text-blue-600 hover:underline">← Все преподаватели</a>
       </div>
     </main>
   );

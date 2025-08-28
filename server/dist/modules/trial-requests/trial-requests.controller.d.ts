@@ -11,6 +11,7 @@ export declare class TrialRequestsController {
         mode: "email";
     }>;
     status(): {
+        ok: boolean;
         emailEnabled: boolean;
     };
 }

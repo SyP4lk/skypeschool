@@ -5,10 +5,10 @@ export declare class ArticlesController {
     list(page?: string, limit?: string): Promise<{
         items: {
             id: string;
+            createdAt: Date;
             slug: string;
             title: string;
             image: string | null;
-            createdAt: Date;
         }[];
         total: number;
         page: number;
@@ -16,10 +16,10 @@ export declare class ArticlesController {
     }>;
     bySlug(slug: string): Promise<{
         id: string;
+        createdAt: Date;
         slug: string;
         title: string;
         content: string;
         image: string | null;
-        createdAt: Date;
     }>;
 }

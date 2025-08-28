@@ -5,6 +5,7 @@ export declare class AuthController {
     private readonly auth;
     private readonly prisma;
     constructor(auth: AuthService, prisma: PrismaService);
+    private cookieOptions;
     login(req: any, res: Response): Promise<{
         ok: boolean;
         user: {

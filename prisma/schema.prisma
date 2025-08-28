@@ -40,32 +40,32 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  teacherProfile    TeacherProfile?
-  studentProfile    StudentProfile?
-  lessonsAsTeacher  Lesson[]        @relation("TeacherLessons")
-  lessonsAsStudent  Lesson[]        @relation("StudentLessons")
+  teacherProfile   TeacherProfile?
+  studentProfile   StudentProfile?
+  lessonsAsTeacher Lesson[]        @relation("TeacherLessons")
+  lessonsAsStudent Lesson[]        @relation("StudentLessons")
 
-  balanceChanges    BalanceChange[] @relation("UserBalanceChanges")
-  changesMade       BalanceChange[] @relation("AdminBalanceChanges")
+  balanceChanges BalanceChange[] @relation("UserBalanceChanges")
+  changesMade    BalanceChange[] @relation("AdminBalanceChanges")
 }
 
 model TeacherProfile {
-  id              String   @id @default(uuid())
-  user            User     @relation(fields: [userId], references: [id])
-  userId          String   @unique
+  id              String           @id @default(uuid())
+  user            User             @relation(fields: [userId], references: [id])
+  userId          String           @unique
   photo           String?
   aboutShort      String?
   aboutFull       String?
   education       String?
-  isActive        Boolean  @default(true)
-  sortOrder       Int      @default(0)
+  isActive        Boolean          @default(true)
+  sortOrder       Int              @default(0)
   teacherSubjects TeacherSubject[]
 }
 
 model StudentProfile {
-  id              String @id @default(uuid())
-  user            User   @relation(fields: [userId], references: [id])
-  userId          String @unique
+  id     String @id @default(uuid())
+  user   User   @relation(fields: [userId], references: [id])
+  userId String @unique
 
   // contacts & avatar for admin UI
   avatar          String?
@@ -77,9 +77,8 @@ model StudentProfile {
   contactDiscord  String?
 }
 
-
 model Category {
-  id       String   @id @default(uuid())
+  id       String    @id @default(uuid())
   name     String
   subjects Subject[]
 }
@@ -97,10 +96,9 @@ model Subject {
   seoTitle         String?
   seoDescription   String?
 
-  teacherSubjects  TeacherSubject[]
-  lessons          Lesson[]
-  trialRequests  TrialRequest[] @relation(name: "SubjectToTrialRequests")
-
+  teacherSubjects TeacherSubject[]
+  lessons         Lesson[]
+  trialRequests   TrialRequest[]   @relation(name: "SubjectToTrialRequests")
 }
 
 model TeacherSubject {
@@ -112,6 +110,7 @@ model TeacherSubject {
   price     Int
   duration  Int
 }
+
 model Article {
   id        String   @id @default(uuid())
   slug      String   @unique
@@ -159,15 +158,13 @@ enum InboxStatus {
 }
 
 model TrialRequest {
-  id        String      @id @default(uuid())
+  id        String  @id @default(uuid())
   name      String
   contact   String?
   subjectId String?
-<<<<<<< HEAD
-  subject   Subject?    @relation(name: \"SubjectToTrialRequests\", fields: [subjectId], references: [id])
-=======
-  subject   Subject?    @relation(name: "SubjectToTrialRequests", fields: [subjectId], references: [id])
->>>>>>> origin/main
+
+  subject Subject? @relation(name: "SubjectToTrialRequests", fields: [subjectId], references: [id])
+
   message   String?
   status    InboxStatus @default(new)
   createdAt DateTime    @default(now())

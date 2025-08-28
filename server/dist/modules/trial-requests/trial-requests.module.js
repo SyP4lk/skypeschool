@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TrialRequestsModule = void 0;
 const common_1 = require("@nestjs/common");
+const prisma_service_1 = require("../../prisma.service");
 const trial_requests_controller_1 = require("./trial-requests.controller");
 const trial_requests_service_1 = require("./trial-requests.service");
 let TrialRequestsModule = class TrialRequestsModule {
@@ -16,7 +17,7 @@ exports.TrialRequestsModule = TrialRequestsModule;
 exports.TrialRequestsModule = TrialRequestsModule = __decorate([
     (0, common_1.Module)({
         controllers: [trial_requests_controller_1.TrialRequestsController],
-        providers: [trial_requests_service_1.TrialRequestsService],
+        providers: [trial_requests_service_1.TrialRequestsService, prisma_service_1.PrismaService],
     })
 ], TrialRequestsModule);
 //# sourceMappingURL=trial-requests.module.js.map

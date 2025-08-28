@@ -1,5 +1,8 @@
-// app/interesnye-stati/[slug]/page.tsx
 import Link from 'next/link';
+
+const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/+$/, '');
+const ORIGIN = API.replace(/\/api$/, '');
+const toAbs = (p?: string | null) => (!p ? null : p.startsWith('http') ? p : `${ORIGIN}${p.startsWith('/') ? '' : '/'}${p}`);
 
 type Article = {
   id: string;
@@ -15,8 +18,7 @@ type Props = { params: Promise<{ slug: string }> };
 export default async function Page({ params }: Props) {
   const { slug } = await params;
 
-  const api = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
-  const res = await fetch(`${api}/articles/${encodeURIComponent(slug)}`, { cache: 'no-store' });
+  const res = await fetch(`${API}/articles/${encodeURIComponent(slug)}`, { cache: 'no-store' });
 
   if (!res.ok) {
     return (
@@ -35,12 +37,13 @@ export default async function Page({ params }: Props) {
 
   const date = new Date(a.createdAt);
   const dateStr = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${date.getFullYear()}`;
+  const img = toAbs(a.image);
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-2">{a.title}</h1>
       <div className="text-sm text-gray-500 mb-6">{dateStr}</div>
-      {a.image && <img src={a.image} alt="" className="mb-6 rounded" />}
+      {img && <img src={img} alt="" className="mb-6 rounded" loading="lazy" decoding="async" />}
       <article className="space-y-4">
         {paragraphs.map((p, i) => <p key={i}>{p}</p>)}
       </article>

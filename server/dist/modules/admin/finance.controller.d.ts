@@ -2,13 +2,12 @@ import { PrismaService } from '../../prisma.service';
 export declare class AdminFinanceController {
     private prisma;
     constructor(prisma: PrismaService);
-    adjust(body: {
+    change(body: {
         userId: string;
         delta: number;
         reason?: string;
-        adminId?: string;
     }): Promise<{
-        ok: boolean;
+        userId: string;
         balance: number;
     }>;
 }

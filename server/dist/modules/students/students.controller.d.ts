@@ -13,6 +13,13 @@ export declare class StudentsController {
         studentProfile: {
             id: string;
             userId: string;
+            avatar: string | null;
+            contactSkype: string | null;
+            contactVk: string | null;
+            contactGoogle: string | null;
+            contactWhatsapp: string | null;
+            contactMax: string | null;
+            contactDiscord: string | null;
         } | null;
     }[]>;
     create(body: {
