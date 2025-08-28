@@ -5,8 +5,6 @@ const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').rep
 
 type Category = { id: string; name: string };
 type Subject   = { id: string; name: string; minPrice?: number | null; minDuration?: number | null };
-
-// Локальные типы — не импортируем из клиентского файла
 type TeacherSubject = { id?: string; subjectId?: string; name: string; price?: number | null; duration?: number | null };
 type TeacherProfileDTO = {
   id: string;
@@ -16,24 +14,22 @@ type TeacherProfileDTO = {
   teacherSubjects?: TeacherSubject[] | null;
 };
 
-type Props = { searchParams?: Promise<{ categoryId?: string; subjectId?: string; sort?: string }> };
+type Props = { searchParams?: Promise<{ categoryId?: string; subjectId?: string; sort?: string; price?: string }> };
 
 export default async function Page({ searchParams }: Props) {
   const sp = (await searchParams) ?? {};
   const categoryId = sp.categoryId || '';
   const subjectId  = sp.subjectId  || '';
   const sort       = sp.sort       || '';
+  const price      = sp.price      || '';
 
-  // словари для фильтров
   const [catsRes, subsRes] = await Promise.all([
     fetch(`${API}/categories`, { cache: 'no-store' }),
     fetch(`${API}/subjects`,   { cache: 'no-store' }),
   ]);
-
   const categories: Category[] = catsRes.ok ? await catsRes.json() : [];
   const subjects: Subject[]    = subsRes.ok ? await subsRes.json()  : [];
 
-  // список преподавателей
   const qs = new URLSearchParams();
   if (categoryId) qs.set('categoryId', categoryId);
   if (subjectId)  qs.set('subjectId', subjectId);
@@ -42,7 +38,7 @@ export default async function Page({ searchParams }: Props) {
   const data = listRes.ok ? await listRes.json() : { items: [] };
   const items: TeacherProfileDTO[] = Array.isArray(data) ? data : (data.items || []);
 
-  // простая сортировка по минимальной цене
+  // серверная сортировка — по минимальной цене
   const sorted = (() => {
     if (!sort) return items;
     const getMin = (t: TeacherProfileDTO) => {
@@ -60,7 +56,7 @@ export default async function Page({ searchParams }: Props) {
       data={sorted}
       categories={categories}
       subjects={subjects}
-      initialFilters={{ categoryId, subjectId, sort }}
+      initialFilters={{ categoryId, subjectId, sort, price }}
     />
   );
 }
