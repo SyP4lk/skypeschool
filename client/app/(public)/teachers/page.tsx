@@ -1,18 +1,28 @@
 // app/(public)/teachers/page.tsx
-import TeachersClient, { TeacherProfileDTO } from './teachers-client';
+import TeachersClient from './teachers-client';
 
 const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/+$/, '');
 
 type Category = { id: string; name: string };
-type Subject = { id: string; name: string; minPrice?: number | null; minDuration?: number | null };
+type Subject   = { id: string; name: string; minPrice?: number | null; minDuration?: number | null };
+
+// Локальные типы — не импортируем из клиентского файла
+type TeacherSubject = { id?: string; subjectId?: string; name: string; price?: number | null; duration?: number | null };
+type TeacherProfileDTO = {
+  id: string;
+  photo?: string | null;
+  aboutShort?: string | null;
+  user?: { firstName?: string | null; lastName?: string | null; login?: string | null } | null;
+  teacherSubjects?: TeacherSubject[] | null;
+};
 
 type Props = { searchParams?: Promise<{ categoryId?: string; subjectId?: string; sort?: string }> };
 
 export default async function Page({ searchParams }: Props) {
   const sp = (await searchParams) ?? {};
   const categoryId = sp.categoryId || '';
-  const subjectId = sp.subjectId || '';
-  const sort = sp.sort || '';
+  const subjectId  = sp.subjectId  || '';
+  const sort       = sp.sort       || '';
 
   // словари для фильтров
   const [catsRes, subsRes] = await Promise.all([
@@ -21,26 +31,26 @@ export default async function Page({ searchParams }: Props) {
   ]);
 
   const categories: Category[] = catsRes.ok ? await catsRes.json() : [];
-  const subjects: Subject[]   = subsRes.ok ? await subsRes.json()   : [];
+  const subjects: Subject[]    = subsRes.ok ? await subsRes.json()  : [];
 
-  // загрузка преподавателей по фильтрам
+  // список преподавателей
   const qs = new URLSearchParams();
   if (categoryId) qs.set('categoryId', categoryId);
-  if (subjectId) qs.set('subjectId', subjectId);
+  if (subjectId)  qs.set('subjectId', subjectId);
 
   const listRes = await fetch(`${API}/teachers${qs.toString() ? `?${qs}` : ''}`, { cache: 'no-store' });
   const data = listRes.ok ? await listRes.json() : { items: [] };
   const items: TeacherProfileDTO[] = Array.isArray(data) ? data : (data.items || []);
 
-  // простая серверная сортировка по цене (если надо)
+  // простая сортировка по минимальной цене
   const sorted = (() => {
     if (!sort) return items;
-    const getMin = (t: TeacherProfileDTO) =>
-      Math.min(
-        ...((t.teacherSubjects || [])
-          .map(s => (typeof s.price === 'number' ? s.price! : Number.POSITIVE_INFINITY))),
-      );
-    if (sort === 'priceAsc') return [...items].sort((a, b) => getMin(a) - getMin(b));
+    const getMin = (t: TeacherProfileDTO) => {
+      const vals = (t.teacherSubjects || []).map(s => (typeof s.price === 'number' ? s.price! : Number.POSITIVE_INFINITY));
+      const v = Math.min(...(vals.length ? vals : [Number.POSITIVE_INFINITY]));
+      return Number.isFinite(v) ? v : Number.POSITIVE_INFINITY;
+    };
+    if (sort === 'priceAsc')  return [...items].sort((a, b) => getMin(a) - getMin(b));
     if (sort === 'priceDesc') return [...items].sort((a, b) => getMin(b) - getMin(a));
     return items;
   })();
