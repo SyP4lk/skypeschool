@@ -150,7 +150,6 @@ function HomeHeader() {
             title="Материалы"
             items={[
               { title: 'Статьи', href: '/interesnye-stati' },
-              { title: 'Вебинары', href: '/webinary' },
               { title: 'Отзывы', href: '/reviews' }
             ]}
           />
