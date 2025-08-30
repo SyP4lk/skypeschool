@@ -9,7 +9,7 @@ export default function Footer() {
       <div className="container">
         <div className={styles.footerLogo}>
           <img
-            src="/logo.jpg"
+            src="/logo.png"
             alt="SkypeSchool логотип"
             width={120}
             height={60}

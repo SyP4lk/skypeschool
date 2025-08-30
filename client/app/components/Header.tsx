@@ -161,7 +161,7 @@ function HomeHeader() {
         </ul>
 
         <Link href="/" className={`${styles.logo} mx-auto h-10 inline-flex items-center`}>
-          <img src="/logo.jpg" alt="SkypeSchool" className="h-20 w-auto object-contain" />
+          <img src="/logo.png" alt="SkypeSchool" className="h-20 w-auto object-contain" />
         </Link>
 
         <ul id="main-nav-right" className={`${styles.rightNavList} flex items-center gap-3`}>
