@@ -34,7 +34,7 @@ type Category = {
 
 const categories: Category[] = [
   { title: 'Английский общий курс',  icon: '/icons/thumbs/language-learning_7231672.webp', alt: 'Английский общий курс' },
-  { title: 'Высшая математика',      icon: '/icons/thumbs/mathematics.webp',        alt: 'Высшая математика' },
+  { title: 'Высшая математика',      icon: '/icons/mathematics.webp',        alt: 'Высшая математика' },
   { title: 'Русский язык ЕГЭ',       icon: '/icons/thumbs/premiere-rush_15584886.webp',    alt: 'Русский язык ЕГЭ' },
   { title: 'Физика для школьников',  icon: '/icons/thumbs/fizika_j5g6lotv576x_512.webp',   alt: 'Физика для школьников' },
   { title: 'Подготовка к TOEFL',     icon: '/icons/thumbs/toefl.webp',                      alt: 'Подготовка к TOEFL' },
