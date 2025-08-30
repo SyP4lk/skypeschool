@@ -197,7 +197,7 @@ function AltHeader() {
     <header className={styles.header}>
       <div className={`${styles.container} flex items-center`}>
         <Link href="/" className="shrink-0 h-10 inline-flex items-center">
-          <img src="/logo.jpg" alt="SkypeSchool" className="h-15 w-auto object-contain" />
+          <img src="/logo.png" alt="SkypeSchool" className="h-15 w-auto object-contain" />
         </Link>
 
         <nav className="mx-auto">
