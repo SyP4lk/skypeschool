@@ -30,7 +30,6 @@ function TeachersDropdown() {
   }, []);
 
   const items = useMemo(() => {
-    // собираем JSX-детей без булевых значений
     const base: JSX.Element[] = [
       <DropdownItem as={Link} key="all" href="/teachers">Все категории</DropdownItem>,
     ];
@@ -88,18 +87,18 @@ function TeachersDropdown() {
   );
 }
 
+/** Универсальный выпадающий список БЕЗ «повторения заголовка» первым пунктом */
 function StaticDropdown({
-  title, href, items,
-}:{ title: string; href?: string; items: {title:string; href:string}[]; }) {
+  title, items,
+}:{ title: string; items: {title:string; href:string}[]; }) {
   const children = useMemo(() => {
-    const head = href
-      ? [<DropdownItem as={Link} key={`${title}-root`} href={href}>{title}</DropdownItem>]
-      : [];
-    const tail = items.map((it,i) =>
-      <DropdownItem as={Link} key={`${title}-${i}`} href={it.href}>{it.title}</DropdownItem>
-    );
-    return [...head, ...tail];
-  }, [title, href, items]);
+    const lower = title.trim().toLowerCase();
+    return items
+      .filter(it => (it.title || '').trim().toLowerCase() !== lower) // на случай, если в items вдруг подсунут дубликат
+      .map((it,i) => (
+        <DropdownItem as={Link} key={`${title}-${i}`} href={it.href}>{it.title}</DropdownItem>
+      ));
+  }, [title, items]);
 
   return (
     <li className={`${styles.menuItem} relative`}>
@@ -149,14 +148,11 @@ function HomeHeader() {
           ))}
           <StaticDropdown
             title="Материалы"
-            href="/interesnye-stati"
-            
             items={[
               { title: 'Статьи', href: '/interesnye-stati' },
               { title: 'Вебинары', href: '/webinary' },
               { title: 'Отзывы', href: '/reviews' }
             ]}
-            
           />
         </ul>
 
@@ -167,7 +163,6 @@ function HomeHeader() {
         <ul id="main-nav-right" className={`${styles.rightNavList} flex items-center gap-3`}>
           <StaticDropdown
             title="О нас"
-            href="/about"
             items={[
               { title: 'О школе', href: '/about' },
               { title: 'Контакты', href: '/contacts' },
@@ -207,8 +202,7 @@ function AltHeader() {
               <Link className={`${styles.navLink} inline-flex items-center px-3 py-2`} href="/prices">Стоимость</Link>
             </li>
             <StaticDropdown
-              title=""
-              href=""
+              title="Статьи"
               items={[
                 { title: 'Статьи', href: '/interesnye-stati' },
                 { title: 'Отзывы', href: '/reviews' },
@@ -216,8 +210,7 @@ function AltHeader() {
               ]}
             />
             <StaticDropdown
-              title=""
-              href=""
+              title="О школе"
               items={[
                 { title: 'О школе', href: '/about' },
                 { title: 'Контакты', href: '/contacts' },

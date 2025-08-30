@@ -53,6 +53,14 @@ export default function Footer() {
               <li><a href="mailto:info@skype-school.com">info@skype-school.com</a></li>
               <li><Link href="/contacts">Все контакты</Link></li>
             </ul>
+
+            {/* Соцсети — иконки. Подставь свои href и src */}
+            <div className="mt-3 flex items-center gap-3">
+              <a href="https://vk.com/id147351527" target="_blank" rel="noopener noreferrer" aria-label="VK">
+                <img src="/social_vk.svg" alt="VK" width={28} height={28} className="inline-block" />
+              </a>
+              
+            </div>
           </div>
         </div>
 
