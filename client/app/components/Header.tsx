@@ -207,18 +207,17 @@ function AltHeader() {
               <Link className={`${styles.navLink} inline-flex items-center px-3 py-2`} href="/prices">Стоимость</Link>
             </li>
             <StaticDropdown
-              title="Материалы"
-              href="/interesnye-stati"
+              title=""
+              href=""
               items={[
                 { title: 'Статьи', href: '/interesnye-stati' },
-                { title: 'Вебинары', href: '/webinary' },
                 { title: 'Отзывы', href: '/reviews' },
                 { title: 'FAQ', href: '/faq' },
               ]}
             />
             <StaticDropdown
-              title="О нас"
-              href="/about"
+              title=""
+              href=""
               items={[
                 { title: 'О школе', href: '/about' },
                 { title: 'Контакты', href: '/contacts' },
