@@ -50,6 +50,7 @@ export default function Footer() {
             <h4>Контакты</h4>
             <ul>
               <li><a href="tel:+79061268888">+7 906 126-88-88</a></li>
+              <li><a href="tel:+79093443705">+7 909 344-37-05</a></li>
               <li><a href="mailto:info@skype-school.com">info@skype-school.com</a></li>
               <li><Link href="/contacts">Все контакты</Link></li>
             </ul>
@@ -59,7 +60,15 @@ export default function Footer() {
               <a href="https://vk.com/id147351527" target="_blank" rel="noopener noreferrer" aria-label="VK">
                 <img src="/social_vk.svg" alt="VK" width={28} height={28} className="inline-block" />
               </a>
-              
+              <a href="https://vk.com/id147351527" target="_blank" rel="noopener noreferrer" aria-label="VK">
+                <img src="/telegram.svg" alt="VK" width={28} height={28} className="inline-block" />
+              </a>
+              <a href="https://www.instagram.com/skype_school_marina/" target="_blank" rel="noopener noreferrer" aria-label="VK">
+                <img src="/instagram.svg" alt="VK" width={28} height={28} className="inline-block" />
+              </a>
+              <a href="https://wa.me/79093443705" target="_blank" rel="noopener noreferrer" aria-label="VK">
+                <img src="/whatsapp.svg" alt="VK" width={28} height={28} className="inline-block" />
+              </a>
             </div>
           </div>
         </div>

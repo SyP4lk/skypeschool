@@ -40,7 +40,7 @@ const categories: Category[] = [
   { title: 'Подготовка к TOEFL',     icon: '/icons/thumbs/toefl.webp',                      alt: 'Подготовка к TOEFL' },
   { title: 'Шахматы детям',          icon: '/icons/thumbs/strategiya_dq10c445olj4_512.webp',alt: 'Шахматы детям' },
   { title: 'Детский логопед',        icon: '/icons/thumbs/logopediya_032nkwn8jwck_512.webp',alt: 'Детский логопед' },
-  { title: 'Рисунок и живопись',     icon: '/icons/thumbs/zhivopis_zowlonpqgmy9_512.webp', alt: 'Рисунок и живопись' },
+  { title: 'Немецкий язык',          icon: '/icons/thumbs/izucite-koncepciu-onlain-obrazovania-nemeckogo-azyka.jpg', alt: 'Рисунок и живопись' },
   { title: 'Китайский язык',         icon: '/icons/thumbs/kitaj_8bfrwpul7o2d_512.webp',     alt: 'Китайский язык' },
   { title: 'Информатика ЕГЭ ОГЭ',    icon: '/icons/thumbs/informatika_0c2itb0a3w01_512.webp',alt: 'Информатика ЕГЭ ОГЭ' },
 ];
@@ -95,7 +95,7 @@ const steps = [
     number: '3',
     title: 'Получаете результат',
     description:
-      'Учитесь онлайн и отслеживаете прогресс в личном кабинете, занимаясь из любой точки мира.',
+      'Занимаясь из любой точки мира.',
   },
 ];
 
