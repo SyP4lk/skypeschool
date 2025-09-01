@@ -10,12 +10,11 @@ export default function ContactPage() {
       <div className="grid gap-8 md:grid-cols-2">
         {/* Левая колонка */}
         <section>
-          <h4 className="text-lg font-semibold mb-3">Контакты</h4>
           <ul className="space-y-2">
             <li><a href="tel:+79061268888">+7 906 126-88-88</a></li>
             <li><a href="tel:+79093443705">+7 909 344-37-05</a></li>
             <li><a href="mailto:info@skype-school.com">info@skype-school.com</a></li>
-            <li><Link href="/contacts">Все контакты</Link></li>
+            
           </ul>
 
           <div className="mt-5">
