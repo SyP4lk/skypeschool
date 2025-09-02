@@ -35,9 +35,7 @@ export default function ContactPage() {
             <a href="https://www.instagram.com/skype_school_marina/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
               <img src="/instagram.svg" alt="Instagram" width={28} height={28} />
             </a>
-            <a href="https://wa.me/79093443705" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
-              <img src="/whatsapp.svg" alt="WhatsApp" width={28} height={28} />
-            </a>
+            
             <a href="https://wa.me/79093443705" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
               <img src="/whatsapp.svg" alt="WhatsApp" width={28} height={28} />
             </a>
@@ -53,6 +51,7 @@ export default function ContactPage() {
             >
               <img src="/teams.svg" alt="Microsoft Teams" width={28} height={28} />
             </a>
+            
           </div>
         </section>
 

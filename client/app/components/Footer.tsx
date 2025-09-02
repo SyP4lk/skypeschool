@@ -81,6 +81,7 @@ export default function Footer() {
             >
               <img src="/teams.svg" alt="Microsoft Teams" width={28} height={28} />
             </a>
+            
             </div>
           </div>
         </div>
