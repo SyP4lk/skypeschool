@@ -29,7 +29,7 @@ export default function ContactPage() {
             <a href="https://vk.com/id147351527" target="_blank" rel="noopener noreferrer" aria-label="VK">
               <img src="/social_vk.svg" alt="VK" width={28} height={28} />
             </a>
-            <a href="https://t.me/skype_school_marina" target="_blank" rel="noopener noreferrer" aria-label="Telegram">
+            <a href="https://t.me/Marinaskypeschool" target="_blank" rel="noopener noreferrer" aria-label="Telegram">
               <img src="/telegram.svg" alt="Telegram" width={28} height={28} />
             </a>
             <a href="https://www.instagram.com/skype_school_marina/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
@@ -37,6 +37,21 @@ export default function ContactPage() {
             </a>
             <a href="https://wa.me/79093443705" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
               <img src="/whatsapp.svg" alt="WhatsApp" width={28} height={28} />
+            </a>
+            <a href="https://wa.me/79093443705" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
+              <img src="/whatsapp.svg" alt="WhatsApp" width={28} height={28} />
+            </a>
+            <a href="https://us04web.zoom.us/j/4494562149?pwd=yKxhoXhsbuPourJGkz84Pt2gKFSKRI.1" target="_blank" rel="noopener noreferrer" aria-label="Zoom" title="Открыть Zoom">
+              <img src="/zoom.svg" alt="Zoom" width={28} height={28} />
+            </a>
+            <a
+              href="https://teams.live.com/l/chat/0/0?users=duranovamar@hotmail.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Microsoft Teams"
+              title="Написать в Microsoft Teams"
+            >
+              <img src="/teams.svg" alt="Microsoft Teams" width={28} height={28} />
             </a>
           </div>
         </section>
