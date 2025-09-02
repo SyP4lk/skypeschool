@@ -60,7 +60,7 @@ export default function Footer() {
               <a href="https://vk.com/id147351527" target="_blank" rel="noopener noreferrer" aria-label="VK">
                 <img src="/social_vk.svg" alt="VK" width={28} height={28} className="inline-block" />
               </a>
-              <a href="https://vk.com/id147351527" target="_blank" rel="noopener noreferrer" aria-label="VK">
+              <a href="https://t.me/Marinaskypeschool" target="_blank" rel="noopener noreferrer" aria-label="VK">
                 <img src="/telegram.svg" alt="VK" width={28} height={28} className="inline-block" />
               </a>
               <a href="https://www.instagram.com/skype_school_marina/" target="_blank" rel="noopener noreferrer" aria-label="VK">
