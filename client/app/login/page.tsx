@@ -1,104 +1,92 @@
 'use client';
-
-import { useState, FormEvent } from 'react';
+import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-const API = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, ''); // https://skypeschool-server.onrender.com/api
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const API_BASE = '';
 
-// Прогрев: GET на существующий публичный роут (без preflight)
-async function warmUp() {
-  try {
-    await fetch(`${API}/teachers?limit=1`, { cache: 'no-store', keepalive: true, mode: 'cors' });
-  } catch {}
+async function api(path: string, init: RequestInit = {}) {
+  const res = await fetch(`${API_BASE}/api${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init.headers || {}),
+    },
+    credentials: 'include',
+    cache: 'no-store',
+  });
+  const txt = await res.text().catch(()=>'');
+  let data: any = null;
+  try { data = txt ? JSON.parse(txt) : null; } catch {}
+  if (!res.ok) throw new Error((data && (data.message || data.error)) || txt || `HTTP ${res.status}`);
+  return data;
 }
 
-async function fetchWithRetry(input: RequestInfo | URL, init: RequestInit, retries = 3) {
-  let last: any;
-  for (let i = 0; i < retries; i++) {
+// Try to fetch current user from likely endpoints
+async function fetchMe(): Promise<any|null> {
+  const tryUrls = ['/auth/me', '/users/me', '/me'];
+  for (const url of tryUrls) {
     try {
-      const res = await fetch(input, init);
-      if (res.status !== 503) return res;
-      last = new Error('503 Service Unavailable');
-    } catch (e) {
-      last = e;
-    }
-    await sleep(800 * (i + 1));
+      const me = await api(url, { method: 'GET' });
+      if (me) return me;
+    } catch (_e) {}
   }
-  throw last;
+  return null;
+}
+
+function redirectByRole(router: ReturnType<typeof useRouter>, role?: string) {
+  const r = String(role || '').toLowerCase();
+  if (r === 'admin') router.push('/admin/finance');
+  else if (r === 'teacher') router.push('/lk/teacher');
+  else router.push('/lk/student');
 }
 
 export default function LoginPage() {
   const router = useRouter();
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string>('');
-  const [ok, setOk] = useState(false);
+  const [err, setErr] = useState<string|null>(null);
+  const [msg, setMsg] = useState<string|null>(null);
+  const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  const onSubmit = async (e: any) => {
     e.preventDefault();
-    setError('');
-    setOk(false);
-
+    setErr(null); setMsg(null); setLoading(true);
     try {
-      await warmUp();
-      await sleep(300);
-
-      // urlencoded без явного Content-Type -> без preflight
-      const body = new URLSearchParams({
-        loginOrEmail: login,
-        login,
-        password,
-      });
-
-      const res = await fetchWithRetry(`${API}/auth/login`, {
-        method: 'POST',
-        credentials: 'include',
-        body,
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `Ошибка входа (${res.status})`);
-      }
-
-      setOk(true);
-
-      // Узнаём роль и уводим в нужный раздел
-      let role: string | undefined;
-      try {
-        const me = await fetch(`${API}/auth/me`, { credentials: 'include', cache: 'no-store' });
-        if (me.ok) role = (await me.json())?.role;
-      } catch {}
-
-      router.replace(
-        role === 'admin' ? '/admin' :
-        role === 'teacher' ? '/lk/teacher' :
-        role === 'student' ? '/lk/student' : '/'
-      );
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось выполнить вход');
+      await api('/auth/login', { method: 'POST', body: JSON.stringify({ login, password }) });
+      // try to detect role and redirect
+      const me = await fetchMe();
+      const role = (me?.role) || (me?.user?.role) || (me?.data?.role);
+      setMsg('Успешный вход');
+      redirectByRole(router, role);
+    } catch (e:any) {
+      setErr(e?.message || 'Ошибка входа');
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="max-w-sm mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-4">Вход</h1>
-
-      {ok && <div className="mb-3 rounded bg-green-100 text-green-800 px-3 py-2">Успешный вход</div>}
-      {error && <div className="mb-3 rounded bg-red-100 text-red-800 px-3 py-2">{error}</div>}
-
-      <form onSubmit={handleSubmit} className="space-y-3">
+    <div className="max-w-md mx-auto py-10">
+      <h1 className="text-xl font-semibold mb-4">Вход</h1>
+      {err && <div className="mb-3 px-3 py-2 rounded border border-rose-300 bg-rose-50 text-rose-800">{err}</div>}
+      {msg && <div className="mb-3 px-3 py-2 rounded border border-green-300 bg-green-50 text-green-800">{msg}</div>}
+      <form className="space-y-3" onSubmit={onSubmit}>
         <div>
-          <label className="block mb-1">Логин или email</label>
-          <input className="border p-2 w-full" value={login} onChange={(e) => setLogin(e.target.value)} required />
+          <label className="text-sm block mb-1">Логин или email</label>
+          <input className="w-full rounded border px-3 py-2" value={login} onChange={e=>setLogin(e.target.value)} required />
         </div>
         <div>
-          <label className="block mb-1">Пароль</label>
-          <input type="password" className="border p-2 w-full" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <label className="text-sm block mb-1">Пароль</label>
+          <input type="password" className="w-full rounded border px-3 py-2" value={password} onChange={e=>setPassword(e.target.value)} required />
         </div>
-        <button className="bg-blue-600 text-white px-4 py-2 rounded" type="submit">Войти</button>
+        <button className="px-4 py-2 rounded border bg-blue-600 text-white disabled:opacity-60" disabled={loading}>
+          {loading ? 'Входим…' : 'Войти'}
+        </button>
       </form>
+      <div className="mt-4 text-sm">
+        Нет аккаунта? <Link href="/register" className="text-blue-600 hover:underline">Зарегистрироваться</Link>
+      </div>
     </div>
   );
 }

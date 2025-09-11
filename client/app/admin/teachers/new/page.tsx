@@ -1,82 +1,105 @@
-'use client';
+"use client";
 
-import { useEffect, useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-type Subject = { id: string; name: string };
-
-const API_BASE =
-  (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, ''); // напр. https://skypeschool-server.onrender.com/api
-
-export default function AdminTeacherNewPage() {
+/**
+ * Страница создания нового преподавателя.
+ */
+export default function NewTeacherPage() {
   const router = useRouter();
-
-  // Поля формы
-  const [login, setLogin] = useState('');
-  const [password, setPassword] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [aboutShort, setAboutShort] = useState('');
+  const [login, setLogin] = useState("");
+  const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [aboutShort, setAboutShort] = useState("");
+  // сохраняем выбранный файл, а также путь для предпросмотра
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // список всех предметов для выбора (id, name)
+  const [subjectsList, setSubjectsList] = useState<{ id: string; name: string }[]>([]);
+  // массив преподаваемых предметов со стоимостью и длительностью
+  const [teacherSubjects, setTeacherSubjects] = useState<{
+    subjectId: string;
+    price: number;
+    duration: number;
+  }[]>([]);
 
-  // Предметы
-  const [subjectsList, setSubjectsList] = useState<Subject[]>([]);
-  const [teacherSubjects, setTeacherSubjects] = useState<
-    { subjectId: string; duration: number; price: number }[]
-  >([{ subjectId: '', duration: 60, price: 0 }]);
-
-  const [error, setError] = useState<string>('');
-
-  // Загружаем справочник предметов
+  // получаем список предметов при первой загрузке
   useEffect(() => {
-    const url = API_BASE ? `${API_BASE}/subjects` : `/api/subjects`;
-    fetch(url, { credentials: 'include', cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.statusText)))
+    fetch(`/api/subjects`, {
+      credentials: "include",
+    })
+      .then((res) => res.json())
       .then((data) => {
-        // ожидаем [{id, name}]
-        setSubjectsList(Array.isArray(data) ? data : []);
+        if (Array.isArray(data)) {
+          setSubjectsList(data.map((s: any) => ({ id: s.id, name: s.name })));
+        }
       })
-      .catch(() => setSubjectsList([]));
+      .catch(() => {});
   }, []);
 
-  // Сабмит формы
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError('');
-
+  async 
+function handleSubmit(e: React.FormEvent) {
+  e.preventDefault();
+  setError(null);
+  setSuccess(null);
+  (async () => {
     try {
-      const formData = new FormData();
-      formData.append('login', login);
-      formData.append('password', password);
-      formData.append('firstName', firstName);
-      formData.append('lastName', lastName);
-      if (aboutShort) formData.append('aboutShort', aboutShort);
-
-      // имя поля для файла на бэке — 'photo'
-      if (photoFile) formData.append('photo', photoFile);
-
-      // список предметов — в JSON
-      formData.append('teacherSubjects', JSON.stringify(teacherSubjects));
-
-      const url = API_BASE
-        ? `${API_BASE}/admin/teachers`
-        : `/api/admin/teachers`;
-
-      const res = await fetch(url, {
+      // 1) Create user as teacher
+      const userRes = await fetch(`/api/admin/users`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         credentials: 'include',
-        body: formData,
+        body: JSON.stringify({
+          login, password, role: 'teacher',
+          firstName: firstName || null, lastName: lastName || null,
+        }),
       });
+      if (!userRes.ok) throw new Error(await userRes.text());
+      const newUser = await userRes.json();
+      const userId = newUser?.id;
+      if (!userId) throw new Error('user_not_created');
 
-      if (res.ok) {
-        router.push('/admin/teachers');
-      } else {
-        const text = await res.text();
-        setError(text || 'Ошибка при создании преподавателя');
-      }
+      // 2) Ensure TeacherProfile exists
+      const tRes = await fetch(`/api/admin/teachers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ userId }),
+      });
+      if (!tRes.ok) throw new Error(await tRes.text());
+
+      // 3) Save profile fields (about + subjects). Photo upload is temporarily disabled.
+      const saveRes = await fetch(`/api/admin/teachers/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          aboutShort,
+          teacherSubjects,
+        }),
+      });
+      if (!saveRes.ok) throw new Error(await saveRes.text());
+
+      setSuccess('Создан преподаватель.');
+      router.push('/admin/teachers');
     } catch (err: any) {
-      setError(err?.message || 'Не удалось отправить форму');
+      setError(err?.message || String(err));
+    }
+  })();
+}
+const res = await fetch(`/api/admin/teachers`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+    if (res.ok) {
+      router.push("/admin/teachers");
+    } else {
+      const text = await res.text();
+      setError(text || "Ошибка");
     }
   }
 
@@ -84,7 +107,6 @@ export default function AdminTeacherNewPage() {
     <div className="p-6 max-w-md">
       <h1 className="text-2xl font-bold mb-4">Новый преподаватель</h1>
       {error && <p className="text-red-600 mb-4">{error}</p>}
-
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block mb-1">Логин</label>
@@ -96,7 +118,6 @@ export default function AdminTeacherNewPage() {
             required
           />
         </div>
-
         <div>
           <label className="block mb-1">Пароль</label>
           <input
@@ -107,7 +128,6 @@ export default function AdminTeacherNewPage() {
             required
           />
         </div>
-
         <div>
           <label className="block mb-1">Имя</label>
           <input
@@ -118,7 +138,6 @@ export default function AdminTeacherNewPage() {
             required
           />
         </div>
-
         <div>
           <label className="block mb-1">Фамилия</label>
           <input
@@ -129,7 +148,6 @@ export default function AdminTeacherNewPage() {
             required
           />
         </div>
-
         <div>
           <label className="block mb-1">Фото</label>
           <input
@@ -138,9 +156,12 @@ export default function AdminTeacherNewPage() {
             onChange={(e) => {
               const file = e.target.files?.[0] || null;
               setPhotoFile(file);
+              // создаём превью
               if (file) {
                 const reader = new FileReader();
-                reader.onload = () => setPhotoPreview(reader.result as string);
+                reader.onload = () => {
+                  setPhotoPreview(reader.result as string);
+                };
                 reader.readAsDataURL(file);
               } else {
                 setPhotoPreview(null);
@@ -156,7 +177,6 @@ export default function AdminTeacherNewPage() {
             />
           )}
         </div>
-
         <div>
           <label className="block mb-1">Краткое описание</label>
           <textarea
@@ -165,10 +185,8 @@ export default function AdminTeacherNewPage() {
             className="border p-2 w-full"
           />
         </div>
-
         <div>
           <label className="block mb-1">Предметы, длительность и цена</label>
-
           {teacherSubjects.map((ts, idx) => (
             <div key={idx} className="mb-2 flex items-end space-x-2">
               <select
@@ -177,8 +195,8 @@ export default function AdminTeacherNewPage() {
                   const val = e.target.value;
                   setTeacherSubjects((prev) =>
                     prev.map((item, i) =>
-                      i === idx ? { ...item, subjectId: val } : item,
-                    ),
+                      i === idx ? { ...item, subjectId: val } : item
+                    )
                   );
                 }}
                 className="border p-2 flex-1"
@@ -191,7 +209,6 @@ export default function AdminTeacherNewPage() {
                   </option>
                 ))}
               </select>
-
               <input
                 type="number"
                 min={1}
@@ -200,15 +217,14 @@ export default function AdminTeacherNewPage() {
                   const val = parseInt(e.target.value) || 0;
                   setTeacherSubjects((prev) =>
                     prev.map((item, i) =>
-                      i === idx ? { ...item, duration: val } : item,
-                    ),
+                      i === idx ? { ...item, duration: val } : item
+                    )
                   );
                 }}
                 className="border p-2 w-24"
                 placeholder="мин"
                 required
               />
-
               <input
                 type="number"
                 min={0}
@@ -217,20 +233,19 @@ export default function AdminTeacherNewPage() {
                   const val = parseFloat(e.target.value) || 0;
                   setTeacherSubjects((prev) =>
                     prev.map((item, i) =>
-                      i === idx ? { ...item, price: val } : item,
-                    ),
+                      i === idx ? { ...item, price: val } : item
+                    )
                   );
                 }}
                 className="border p-2 w-24"
                 placeholder="цена"
                 required
               />
-
               <button
                 type="button"
                 onClick={() =>
                   setTeacherSubjects((prev) =>
-                    prev.filter((_, i) => i !== idx),
+                    prev.filter((_, i) => i !== idx)
                   )
                 }
                 className="text-red-500 px-2"
@@ -239,13 +254,12 @@ export default function AdminTeacherNewPage() {
               </button>
             </div>
           ))}
-
           <button
             type="button"
             onClick={() =>
               setTeacherSubjects((prev) => [
                 ...prev,
-                { subjectId: '', duration: 60, price: 0 },
+                { subjectId: "", duration: 60, price: 0 },
               ])
             }
             className="mt-2 bg-gray-200 hover:bg-gray-300 text-sm px-3 py-1 rounded"
@@ -253,11 +267,7 @@ export default function AdminTeacherNewPage() {
             + Добавить предмет
           </button>
         </div>
-
-        <button
-          type="submit"
-          className="bg-blue-600 text-white py-2 px-4 rounded"
-        >
+        <button type="submit" className="bg-blue-600 text-white py-2 px-4 rounded">
           Сохранить
         </button>
       </form>
