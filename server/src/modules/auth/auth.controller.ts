@@ -58,7 +58,7 @@ export class AuthController {
     if (!ident || !password) throw new UnauthorizedException('invalid_credentials');
 
     // Ищем по login/email/phone; если колонок нет — фолбэк к login
-    let user: { id: string; login: string; role: string; passwordHash: string | null } | null = null;
+    let user: any = null;
     try {
       user = await this.prisma.user.findFirst({
         where: { OR: [{ login: ident }, { email: ident }, { phone: ident }] } as any,
@@ -77,7 +77,7 @@ export class AuthController {
       }
     }
 
-    // Основная ветка верификации
+    // Основная ветка верификации по argon2
     if (user && typeof user.passwordHash === 'string' && user.passwordHash) {
       try {
         const ok = /^\$argon2(id|i|d)\$/.test(user.passwordHash)
@@ -96,7 +96,7 @@ export class AuthController {
       }
     }
 
-    // SELF-HEAL для админа без Shell
+    // SELF-HEAL для админа (без Shell)
     const adminLogin = String(process.env.ADMIN_LOGIN || 'admin');
     const adminPass  = String(process.env.ADMIN_INITIAL_PASSWORD || 'Admin12345!');
     if (ident === adminLogin && password === adminPass) {
