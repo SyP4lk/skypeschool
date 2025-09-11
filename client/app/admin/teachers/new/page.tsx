@@ -1,112 +1,103 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
-/**
- * Страница создания нового преподавателя.
- */
-export default function NewTeacherPage() {
+type Subject = { id: string; name: string };
+
+type TeacherSubject = {
+  subjectId: string;
+  duration: number; // минуты
+  price: number;    // рубли (или копейки — зависит от бэка; здесь просто число)
+};
+
+export default function Page() {
   const router = useRouter();
-  const [login, setLogin] = useState("");
-  const [password, setPassword] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [aboutShort, setAboutShort] = useState("");
-  // сохраняем выбранный файл, а также путь для предпросмотра
+
+  // поля формы
+  const [login, setLogin] = useState('');
+  const [password, setPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [aboutShort, setAboutShort] = useState('');
+
+  // фото
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  // список всех предметов для выбора (id, name)
-  const [subjectsList, setSubjectsList] = useState<{ id: string; name: string }[]>([]);
-  // массив преподаваемых предметов со стоимостью и длительностью
-  const [teacherSubjects, setTeacherSubjects] = useState<{
-    subjectId: string;
-    price: number;
-    duration: number;
-  }[]>([]);
 
-  // получаем список предметов при первой загрузке
+  // предметы
+  const [subjectsList, setSubjectsList] = useState<Subject[]>([]);
+  const [teacherSubjects, setTeacherSubjects] = useState<TeacherSubject[]>([
+    { subjectId: '', duration: 60, price: 0 },
+  ]);
+
+  const [error, setError] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+
+  // Подгружаем справочник предметов
   useEffect(() => {
-    fetch(`/api/subjects`, {
-      credentials: "include",
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setSubjectsList(data.map((s: any) => ({ id: s.id, name: s.name })));
-        }
-      })
-      .catch(() => {});
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/subjects?limit=1000', {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        if (!cancelled) setSubjectsList(Array.isArray(data?.items) ? data.items : data);
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message || 'Не удалось загрузить предметы');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  async 
-function handleSubmit(e: React.FormEvent) {
-  e.preventDefault();
-  setError(null);
-  setSuccess(null);
-  (async () => {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
     try {
-      // 1) Create user as teacher
-      const userRes = await fetch(`/api/admin/users`, {
+      const formData = new FormData();
+      formData.append('login', login);
+      formData.append('password', password);
+      formData.append('firstName', firstName);
+      formData.append('lastName', lastName);
+      formData.append('aboutShort', aboutShort);
+      if (photoFile) formData.append('photo', photoFile);
+
+      // Отправляем предметы как JSON (соблюдаем текущий контракт бэка)
+      formData.append('subjects', JSON.stringify(teacherSubjects));
+
+      const res = await fetch('/api/admin/teachers', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          login, password, role: 'teacher',
-          firstName: firstName || null, lastName: lastName || null,
-        }),
+        body: formData, // НЕ ставим вручную Content-Type
       });
-      if (!userRes.ok) throw new Error(await userRes.text());
-      const newUser = await userRes.json();
-      const userId = newUser?.id;
-      if (!userId) throw new Error('user_not_created');
 
-      // 2) Ensure TeacherProfile exists
-      const tRes = await fetch(`/api/admin/teachers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ userId }),
-      });
-      if (!tRes.ok) throw new Error(await tRes.text());
-
-      // 3) Save profile fields (about + subjects). Photo upload is temporarily disabled.
-      const saveRes = await fetch(`/api/admin/teachers/${userId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          aboutShort,
-          teacherSubjects,
-        }),
-      });
-      if (!saveRes.ok) throw new Error(await saveRes.text());
-
-      setSuccess('Создан преподаватель.');
-      router.push('/admin/teachers');
-    } catch (err: any) {
-      setError(err?.message || String(err));
-    }
-  })();
-}
-const res = await fetch(`/api/admin/teachers`, {
-      method: "POST",
-      credentials: "include",
-      body: formData,
-    });
-    if (res.ok) {
-      router.push("/admin/teachers");
-    } else {
-      const text = await res.text();
-      setError(text || "Ошибка");
+      if (res.ok) {
+        router.push('/admin/teachers');
+        return;
+      } else {
+        const text = await res.text();
+        throw new Error(text || 'Ошибка');
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось сохранить');
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
     <div className="p-6 max-w-md">
       <h1 className="text-2xl font-bold mb-4">Новый преподаватель</h1>
+
       {error && <p className="text-red-600 mb-4">{error}</p>}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block mb-1">Логин</label>
@@ -118,6 +109,7 @@ const res = await fetch(`/api/admin/teachers`, {
             required
           />
         </div>
+
         <div>
           <label className="block mb-1">Пароль</label>
           <input
@@ -128,6 +120,7 @@ const res = await fetch(`/api/admin/teachers`, {
             required
           />
         </div>
+
         <div>
           <label className="block mb-1">Имя</label>
           <input
@@ -138,6 +131,7 @@ const res = await fetch(`/api/admin/teachers`, {
             required
           />
         </div>
+
         <div>
           <label className="block mb-1">Фамилия</label>
           <input
@@ -148,6 +142,7 @@ const res = await fetch(`/api/admin/teachers`, {
             required
           />
         </div>
+
         <div>
           <label className="block mb-1">Фото</label>
           <input
@@ -156,12 +151,9 @@ const res = await fetch(`/api/admin/teachers`, {
             onChange={(e) => {
               const file = e.target.files?.[0] || null;
               setPhotoFile(file);
-              // создаём превью
               if (file) {
                 const reader = new FileReader();
-                reader.onload = () => {
-                  setPhotoPreview(reader.result as string);
-                };
+                reader.onload = () => setPhotoPreview(reader.result as string);
                 reader.readAsDataURL(file);
               } else {
                 setPhotoPreview(null);
@@ -177,6 +169,7 @@ const res = await fetch(`/api/admin/teachers`, {
             />
           )}
         </div>
+
         <div>
           <label className="block mb-1">Краткое описание</label>
           <textarea
@@ -185,6 +178,7 @@ const res = await fetch(`/api/admin/teachers`, {
             className="border p-2 w-full"
           />
         </div>
+
         <div>
           <label className="block mb-1">Предметы, длительность и цена</label>
           {teacherSubjects.map((ts, idx) => (
@@ -209,6 +203,7 @@ const res = await fetch(`/api/admin/teachers`, {
                   </option>
                 ))}
               </select>
+
               <input
                 type="number"
                 min={1}
@@ -225,6 +220,7 @@ const res = await fetch(`/api/admin/teachers`, {
                 placeholder="мин"
                 required
               />
+
               <input
                 type="number"
                 min={0}
@@ -241,25 +237,26 @@ const res = await fetch(`/api/admin/teachers`, {
                 placeholder="цена"
                 required
               />
+
               <button
                 type="button"
                 onClick={() =>
-                  setTeacherSubjects((prev) =>
-                    prev.filter((_, i) => i !== idx)
-                  )
+                  setTeacherSubjects((prev) => prev.filter((_, i) => i !== idx))
                 }
                 className="text-red-500 px-2"
+                aria-label="Удалить"
               >
                 ✕
               </button>
             </div>
           ))}
+
           <button
             type="button"
             onClick={() =>
               setTeacherSubjects((prev) => [
                 ...prev,
-                { subjectId: "", duration: 60, price: 0 },
+                { subjectId: '', duration: 60, price: 0 },
               ])
             }
             className="mt-2 bg-gray-200 hover:bg-gray-300 text-sm px-3 py-1 rounded"
@@ -267,8 +264,13 @@ const res = await fetch(`/api/admin/teachers`, {
             + Добавить предмет
           </button>
         </div>
-        <button type="submit" className="bg-blue-600 text-white py-2 px-4 rounded">
-          Сохранить
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="bg-blue-600 text-white py-2 px-4 rounded disabled:opacity-60"
+        >
+          {loading ? 'Сохранение…' : 'Сохранить'}
         </button>
       </form>
     </div>
