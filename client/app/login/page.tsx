@@ -1,92 +1,91 @@
 'use client';
-import { useState } from 'react';
-import Link from 'next/link';
+
+import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
-const API_BASE = '';
-
-async function api(path: string, init: RequestInit = {}) {
-  const res = await fetch(`${API_BASE}/api${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init.headers || {}),
-    },
-    credentials: 'include',
-    cache: 'no-store',
-  });
-  const txt = await res.text().catch(()=>'');
-  let data: any = null;
-  try { data = txt ? JSON.parse(txt) : null; } catch {}
-  if (!res.ok) throw new Error((data && (data.message || data.error)) || txt || `HTTP ${res.status}`);
-  return data;
-}
-
-// Try to fetch current user from likely endpoints
-async function fetchMe(): Promise<any|null> {
-  const tryUrls = ['/auth/me', '/users/me', '/me'];
-  for (const url of tryUrls) {
-    try {
-      const me = await api(url, { method: 'GET' });
-      if (me) return me;
-    } catch (_e) {}
-  }
-  return null;
-}
-
-function redirectByRole(router: ReturnType<typeof useRouter>, role?: string) {
-  const r = String(role || '').toLowerCase();
-  if (r === 'admin') router.push('/admin/finance');
-  else if (r === 'teacher') router.push('/lk/teacher');
-  else router.push('/lk/student');
-}
+const API = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, ''); // https://skypeschool-server.onrender.com/api
 
 export default function LoginPage() {
   const router = useRouter();
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
-  const [err, setErr] = useState<string|null>(null);
-  const [msg, setMsg] = useState<string|null>(null);
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>('');
+  const [ok, setOk] = useState(false);
 
-  const onSubmit = async (e: any) => {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setErr(null); setMsg(null); setLoading(true);
+    setError('');
+    setOk(false);
+
     try {
-      await api('/auth/login', { method: 'POST', body: JSON.stringify({ login, password }) });
-      // try to detect role and redirect
-      const me = await fetchMe();
-      const role = (me?.role) || (me?.user?.role) || (me?.data?.role);
-      setMsg('Успешный вход');
-      redirectByRole(router, role);
-    } catch (e:any) {
-      setErr(e?.message || 'Ошибка входа');
-    } finally {
-      setLoading(false);
+      const res = await fetch(`${API}/auth/login`, {
+        method: 'POST',
+        credentials: 'include', // важно для куки
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ login, password }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Ошибка входа');
+      }
+
+      setOk(true);
+
+      // по желанию узнаём роль и уводим в нужный ЛК
+      let role: string | undefined;
+      try {
+        const me = await fetch(`${API}/auth/me`, { credentials: 'include', cache: 'no-store' });
+        if (me.ok) {
+          const data = await me.json();
+          role = data?.role;
+        }
+      } catch {}
+
+      const target =
+        role === 'admin' ? '/admin' :
+        role === 'teacher' ? '/lk/teacher' :
+        role === 'student' ? '/lk/student' : '/';
+
+      router.replace(target);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось выполнить вход');
     }
-  };
+  }
 
   return (
-    <div className="max-w-md mx-auto py-10">
-      <h1 className="text-xl font-semibold mb-4">Вход</h1>
-      {err && <div className="mb-3 px-3 py-2 rounded border border-rose-300 bg-rose-50 text-rose-800">{err}</div>}
-      {msg && <div className="mb-3 px-3 py-2 rounded border border-green-300 bg-green-50 text-green-800">{msg}</div>}
-      <form className="space-y-3" onSubmit={onSubmit}>
+    <div className="max-w-sm mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold mb-4">Вход</h1>
+
+      {ok && <div className="mb-3 rounded bg-green-100 text-green-800 px-3 py-2">Успешный вход</div>}
+      {error && <div className="mb-3 rounded bg-red-100 text-red-800 px-3 py-2">{error}</div>}
+
+      <form onSubmit={handleSubmit} className="space-y-3">
         <div>
-          <label className="text-sm block mb-1">Логин или email</label>
-          <input className="w-full rounded border px-3 py-2" value={login} onChange={e=>setLogin(e.target.value)} required />
+          <label className="block mb-1">Логин или email</label>
+          <input
+            className="border p-2 w-full"
+            value={login}
+            onChange={(e) => setLogin(e.target.value)}
+            required
+          />
         </div>
+
         <div>
-          <label className="text-sm block mb-1">Пароль</label>
-          <input type="password" className="w-full rounded border px-3 py-2" value={password} onChange={e=>setPassword(e.target.value)} required />
+          <label className="block mb-1">Пароль</label>
+          <input
+            type="password"
+            className="border p-2 w-full"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
         </div>
-        <button className="px-4 py-2 rounded border bg-blue-600 text-white disabled:opacity-60" disabled={loading}>
-          {loading ? 'Входим…' : 'Войти'}
+
+        <button className="bg-blue-600 text-white px-4 py-2 rounded" type="submit">
+          Войти
         </button>
       </form>
-      <div className="mt-4 text-sm">
-        Нет аккаунта? <Link href="/register" className="text-blue-600 hover:underline">Зарегистрироваться</Link>
-      </div>
     </div>
   );
 }
