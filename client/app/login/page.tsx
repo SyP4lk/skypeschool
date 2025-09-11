@@ -4,34 +4,29 @@ import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
 const API = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, ''); // https://skypeschool-server.onrender.com/api
-
-// простая задержка
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-// прогрев бэка без preflight (GET, без credentials/заголовков)
+// Прогрев бэка: лёгкий GET без credentials/заголовков (не вызывает preflight)
 async function warmUp() {
   try {
-    const url = `${API}/public/teachers?limit=1`;
-    await fetch(url, { cache: 'no-store', keepalive: true, mode: 'cors' });
-  } catch {
-    // игнор: цель — разбудить инстанс
-  }
+    await fetch(`${API}/public/teachers?limit=1`, { cache: 'no-store', keepalive: true, mode: 'cors' });
+  } catch {}
 }
 
-// запрос с автоповтором при сетевой ошибке/503
+// POST с автоповтором (если Render ещё просыпается)
 async function fetchWithRetry(input: RequestInfo | URL, init: RequestInit, retries = 3) {
-  let lastErr: any;
+  let last: any;
   for (let i = 0; i < retries; i++) {
     try {
       const res = await fetch(input, init);
       if (res.status !== 503) return res;
-      lastErr = new Error('503 Service Unavailable');
+      last = new Error('503 Service Unavailable');
     } catch (e) {
-      lastErr = e;
+      last = e;
     }
     await sleep(800 * (i + 1)); // 0.8s, 1.6s, 2.4s
   }
-  throw lastErr;
+  throw last;
 }
 
 export default function LoginPage() {
@@ -47,17 +42,21 @@ export default function LoginPage() {
     setOk(false);
 
     try {
-      // 1) прогреть бэк (избежать 503 на preflight)
+      // 1) прогреть
       await warmUp();
-      await sleep(300); // дать инстансу проснуться
+      await sleep(300);
 
-      // 2) логин с повтором
-      const payload = { loginOrEmail: login, login, password };
+      // 2) важное: urlencoded без явного Content-Type -> НЕ будет preflight
+      const body = new URLSearchParams({
+        loginOrEmail: login,
+        login,
+        password,
+      });
+
       const res = await fetchWithRetry(`${API}/auth/login`, {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
+        credentials: 'include', // чтобы кука приклеилась
+        body,                    // Content-Type выставит браузер: application/x-www-form-urlencoded
       });
 
       if (!res.ok) {
@@ -67,14 +66,11 @@ export default function LoginPage() {
 
       setOk(true);
 
-      // подтянем роль (если доступно) и унесем в нужный раздел
+      // Узнаём роль и уводим в нужный раздел
       let role: string | undefined;
       try {
         const me = await fetch(`${API}/auth/me`, { credentials: 'include', cache: 'no-store' });
-        if (me.ok) {
-          const data = await me.json();
-          role = data?.role;
-        }
+        if (me.ok) role = (await me.json())?.role;
       } catch {}
 
       router.replace(
@@ -97,28 +93,13 @@ export default function LoginPage() {
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
           <label className="block mb-1">Логин или email</label>
-          <input
-            className="border p-2 w-full"
-            value={login}
-            onChange={(e) => setLogin(e.target.value)}
-            required
-          />
+          <input className="border p-2 w-full" value={login} onChange={(e) => setLogin(e.target.value)} required />
         </div>
-
         <div>
           <label className="block mb-1">Пароль</label>
-          <input
-            type="password"
-            className="border p-2 w-full"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+          <input type="password" className="border p-2 w-full" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </div>
-
-        <button className="bg-blue-600 text-white px-4 py-2 rounded" type="submit">
-          Войти
-        </button>
+        <button className="bg-blue-600 text-white px-4 py-2 rounded" type="submit">Войти</button>
       </form>
     </div>
   );
