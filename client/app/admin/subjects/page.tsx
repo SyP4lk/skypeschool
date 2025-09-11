@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { api } from '../_lib/api';
+import { apiJson as api } from '@/lib/api';
 import Button from '../../components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -21,7 +21,7 @@ export default function SubjectsPage() {
 
   async function add() {
     if (!name.trim()) return;
-    await api('/subjects', { method: 'POST', body: JSON.stringify({ name, categoryId }) });
+    await api('/subjects', { method: 'POST', json: { name, categoryId } });
     setName(''); load();
   }
   async function del(id: string) { await api(`/subjects/${id}`, { method: 'DELETE' }); load(); }

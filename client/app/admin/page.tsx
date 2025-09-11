@@ -66,9 +66,9 @@ export default function AdminDashboard() {
       {err && <p className="text-red-600">{err}</p>}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Stat title="Уроков сегодня" value={data?.metrics.todayLessons ?? 0} />
-        <Stat title="Ближайшие 7 дней" value={data?.metrics.next7Lessons ?? 0} />
-        <Stat title="Отрицательные балансы" value={data?.metrics.negativeBalances ?? 0} />
+        <Stat title="Уроков сегодня" value={data?.metrics?.todayLessons ?? 0} />
+        <Stat title="Ближайшие 7 дней" value={data?.metrics?.next7Lessons ?? 0} />
+        <Stat title="Отрицательные балансы" value={data?.metrics?.negativeBalances ?? 0} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">

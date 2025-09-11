@@ -9,29 +9,60 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthModule = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_1 = require("@nestjs/jwt");
-const passport_1 = require("@nestjs/passport");
-const auth_service_1 = require("./auth.service");
-const auth_controller_1 = require("./auth.controller");
 const prisma_service_1 = require("../../prisma.service");
-const local_strategy_1 = require("./local.strategy");
-const jwt_strategy_1 = require("./jwt.strategy");
-const env_1 = require("../../config/env");
+const register_controller_1 = require("./register.controller");
+const extraControllers = [];
+try {
+    const m = require('./auth.controller');
+    if (m?.AuthController)
+        extraControllers.push(m.AuthController);
+}
+catch { }
+try {
+    const m = require('./login.controller');
+    if (m?.LoginController)
+        extraControllers.push(m.LoginController);
+}
+catch { }
+try {
+    const m = require('./me.controller');
+    if (m?.MeController)
+        extraControllers.push(m.MeController);
+}
+catch { }
+const extraProviders = [];
+try {
+    const m = require('./auth.service');
+    if (m?.AuthService)
+        extraProviders.push(m.AuthService);
+}
+catch { }
+try {
+    const m = require('./jwt.strategy');
+    if (m?.JwtStrategy)
+        extraProviders.push(m.JwtStrategy);
+}
+catch { }
+try {
+    const m = require('./local.strategy');
+    if (m?.LocalStrategy)
+        extraProviders.push(m.LocalStrategy);
+}
+catch { }
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
 exports.AuthModule = AuthModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            passport_1.PassportModule,
             jwt_1.JwtModule.register({
-                global: true,
-                secret: env_1.JWT_SECRET,
-                signOptions: { expiresIn: env_1.JWT_EXPIRES_IN },
+                secret: process.env.JWT_SECRET || 'dev-secret',
+                signOptions: { expiresIn: '30d' },
             }),
         ],
-        controllers: [auth_controller_1.AuthController],
-        providers: [auth_service_1.AuthService, prisma_service_1.PrismaService, local_strategy_1.LocalStrategy, jwt_strategy_1.JwtStrategy],
-        exports: [auth_service_1.AuthService],
+        controllers: [...extraControllers, register_controller_1.RegisterController],
+        providers: [prisma_service_1.PrismaService, ...extraProviders],
+        exports: [jwt_1.JwtModule],
     })
 ], AuthModule);
 //# sourceMappingURL=auth.module.js.map

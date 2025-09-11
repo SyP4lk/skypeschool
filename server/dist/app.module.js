@@ -19,6 +19,9 @@ const serve_static_1 = require("@nestjs/serve-static");
 const path_1 = require("path");
 const trial_requests_module_1 = require("./modules/trial-requests/trial-requests.module");
 const articles_module_1 = require("./modules/articles/articles.module");
+const finance_module_1 = require("./modules/finance/finance.module");
+const settings_module_1 = require("./modules/settings/settings.module");
+const withdrawals_module_1 = require("./modules/withdrawals/withdrawals.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -26,11 +29,21 @@ exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
             serve_static_1.ServeStaticModule.forRoot({
-                rootPath: (0, path_1.join)(process.cwd(), 'public', 'uploads'),
-                serveRoot: '/uploads',
-                exclude: ['/api*'],
+                rootPath: (0, path_1.join)(__dirname, '..', 'public'),
+                serveRoot: '/public',
             }),
-            auth_module_1.AuthModule, categories_module_1.CategoriesModule, subjects_module_1.SubjectsModule, teachers_module_1.TeachersModule, admin_module_1.AdminModule, students_module_1.StudentsModule, lessons_module_1.LessonsModule, trial_requests_module_1.TrialRequestsModule, articles_module_1.ArticlesModule
+            auth_module_1.AuthModule,
+            categories_module_1.CategoriesModule,
+            subjects_module_1.SubjectsModule,
+            teachers_module_1.TeachersModule,
+            admin_module_1.AdminModule,
+            students_module_1.StudentsModule,
+            lessons_module_1.LessonsModule,
+            trial_requests_module_1.TrialRequestsModule,
+            articles_module_1.ArticlesModule,
+            finance_module_1.FinanceModule,
+            settings_module_1.SettingsModule,
+            withdrawals_module_1.WithdrawalsModule,
         ],
     })
 ], AppModule);

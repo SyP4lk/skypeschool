@@ -57,6 +57,13 @@ export declare class TeachersService {
         education: string | null;
         isActive: boolean;
         sortOrder: number;
+        contactVk: string | null;
+        contactTelegram: string | null;
+        contactWhatsapp: string | null;
+        contactZoom: string | null;
+        contactTeams: string | null;
+        contactDiscord: string | null;
+        contactMax: string | null;
     }) | null>;
     findAllForAdmin(): Promise<({
         user: {
@@ -74,6 +81,13 @@ export declare class TeachersService {
         education: string | null;
         isActive: boolean;
         sortOrder: number;
+        contactVk: string | null;
+        contactTelegram: string | null;
+        contactWhatsapp: string | null;
+        contactZoom: string | null;
+        contactTeams: string | null;
+        contactDiscord: string | null;
+        contactMax: string | null;
     })[]>;
     createTeacher(dto: CreateTeacherDto): Promise<{
         id: string;

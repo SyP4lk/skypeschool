@@ -2,67 +2,320 @@ import { PrismaService } from '../../prisma.service';
 export declare class AdminUsersController {
     private prisma;
     constructor(prisma: PrismaService);
-    list(role?: 'student' | 'teacher' | 'all', query?: string, offset?: string, limit?: string): Promise<{
+    list(q?: string, role?: string, pageStr?: string, limitStr?: string): Promise<{
         items: {
-            id: string;
-            login: string;
-            role: import(".prisma/client").$Enums.Role;
-            firstName: string | null;
-            lastName: string | null;
-            balance: number;
+            [x: string]: ({
+                id: string;
+                teacherId: string;
+                subjectId: string;
+                price: number | null;
+                duration: number;
+                studentId: string;
+                startsAt: Date;
+                status: import(".prisma/client").$Enums.LessonStatus;
+                channel: import(".prisma/client").$Enums.LessonChannel;
+                channelLink: string | null;
+                note: string | null;
+            } | {
+                id: string;
+                teacherId: string;
+                subjectId: string;
+                price: number | null;
+                duration: number;
+                studentId: string;
+                startsAt: Date;
+                status: import(".prisma/client").$Enums.LessonStatus;
+                channel: import(".prisma/client").$Enums.LessonChannel;
+                channelLink: string | null;
+                note: string | null;
+            })[] | ({
+                meta: import(".prisma/client/runtime/library").JsonValue | null;
+                type: import(".prisma/client").$Enums.TxType | null;
+                reason: string | null;
+                id: string;
+                createdAt: Date;
+                userId: string;
+                delta: number;
+                adminId: string | null;
+            } | {
+                meta: import(".prisma/client/runtime/library").JsonValue | null;
+                type: import(".prisma/client").$Enums.TxType | null;
+                reason: string | null;
+                id: string;
+                createdAt: Date;
+                userId: string;
+                delta: number;
+                adminId: string | null;
+            })[] | ({
+                id: string;
+                createdAt: Date;
+                teacherId: string;
+                status: import(".prisma/client").$Enums.WithdrawStatus;
+                amount: number;
+                notes: string | null;
+                resolvedAt: Date | null;
+            } | {
+                id: string;
+                createdAt: Date;
+                teacherId: string;
+                status: import(".prisma/client").$Enums.WithdrawStatus;
+                amount: number;
+                notes: string | null;
+                resolvedAt: Date | null;
+            })[] | {
+                id: string;
+                teacherId: string;
+                subjectId: string;
+                price: number | null;
+                duration: number;
+                studentId: string;
+                startsAt: Date;
+                status: import(".prisma/client").$Enums.LessonStatus;
+                channel: import(".prisma/client").$Enums.LessonChannel;
+                channelLink: string | null;
+                note: string | null;
+            }[] | {
+                meta: import(".prisma/client/runtime/library").JsonValue | null;
+                type: import(".prisma/client").$Enums.TxType | null;
+                reason: string | null;
+                id: string;
+                createdAt: Date;
+                userId: string;
+                delta: number;
+                adminId: string | null;
+            }[] | {
+                id: string;
+                createdAt: Date;
+                teacherId: string;
+                status: import(".prisma/client").$Enums.WithdrawStatus;
+                amount: number;
+                notes: string | null;
+                resolvedAt: Date | null;
+            }[];
+            [x: number]: never;
+            [x: symbol]: never;
         }[];
         total: number;
+        page: number;
+        limit: number;
     }>;
-    getOne(id: string): Promise<{
+    read(id: string): Promise<{
         user: {
-            id: string;
-            login: string;
-            role: import(".prisma/client").$Enums.Role;
-            firstName: string | null;
-            lastName: string | null;
-            tz: string;
-            balance: number;
+            [x: string]: ({
+                id: string;
+                teacherId: string;
+                subjectId: string;
+                price: number | null;
+                duration: number;
+                studentId: string;
+                startsAt: Date;
+                status: import(".prisma/client").$Enums.LessonStatus;
+                channel: import(".prisma/client").$Enums.LessonChannel;
+                channelLink: string | null;
+                note: string | null;
+            } | {
+                id: string;
+                teacherId: string;
+                subjectId: string;
+                price: number | null;
+                duration: number;
+                studentId: string;
+                startsAt: Date;
+                status: import(".prisma/client").$Enums.LessonStatus;
+                channel: import(".prisma/client").$Enums.LessonChannel;
+                channelLink: string | null;
+                note: string | null;
+            })[] | ({
+                meta: import(".prisma/client/runtime/library").JsonValue | null;
+                type: import(".prisma/client").$Enums.TxType | null;
+                reason: string | null;
+                id: string;
+                createdAt: Date;
+                userId: string;
+                delta: number;
+                adminId: string | null;
+            } | {
+                meta: import(".prisma/client/runtime/library").JsonValue | null;
+                type: import(".prisma/client").$Enums.TxType | null;
+                reason: string | null;
+                id: string;
+                createdAt: Date;
+                userId: string;
+                delta: number;
+                adminId: string | null;
+            })[] | ({
+                id: string;
+                createdAt: Date;
+                teacherId: string;
+                status: import(".prisma/client").$Enums.WithdrawStatus;
+                amount: number;
+                notes: string | null;
+                resolvedAt: Date | null;
+            } | {
+                id: string;
+                createdAt: Date;
+                teacherId: string;
+                status: import(".prisma/client").$Enums.WithdrawStatus;
+                amount: number;
+                notes: string | null;
+                resolvedAt: Date | null;
+            })[] | {
+                id: string;
+                teacherId: string;
+                subjectId: string;
+                price: number | null;
+                duration: number;
+                studentId: string;
+                startsAt: Date;
+                status: import(".prisma/client").$Enums.LessonStatus;
+                channel: import(".prisma/client").$Enums.LessonChannel;
+                channelLink: string | null;
+                note: string | null;
+            }[] | {
+                meta: import(".prisma/client/runtime/library").JsonValue | null;
+                type: import(".prisma/client").$Enums.TxType | null;
+                reason: string | null;
+                id: string;
+                createdAt: Date;
+                userId: string;
+                delta: number;
+                adminId: string | null;
+            }[] | {
+                id: string;
+                createdAt: Date;
+                teacherId: string;
+                status: import(".prisma/client").$Enums.WithdrawStatus;
+                amount: number;
+                notes: string | null;
+                resolvedAt: Date | null;
+            }[];
+            [x: number]: never;
+            [x: symbol]: never;
         };
     }>;
-    create(body: {
-        role: 'student' | 'teacher';
+    create(body?: any): Promise<{
+        id: string;
         login: string;
-        password?: string;
-        firstName?: string;
-        lastName?: string;
-        tz?: string;
-    }): Promise<{
-        ok: boolean;
-        user: {
-            id: string;
-            login: string;
-            role: import(".prisma/client").$Enums.Role;
-            firstName: string | null;
-            lastName: string | null;
-            balance: number;
-        };
-        newPassword: string | undefined;
+        email: string | null;
+        phone: string | null;
+        passwordHash: string;
+        role: import(".prisma/client").$Enums.Role;
+        firstName: string | null;
+        lastName: string | null;
+        tz: string;
+        balance: number;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
-    updateNames(id: string, body: {
-        firstName?: string | null;
-        lastName?: string | null;
-    }): Promise<{
-        user: {
+    update(id: string, body?: any): Promise<{
+        [x: string]: ({
             id: string;
-            login: string;
-            role: import(".prisma/client").$Enums.Role;
-            firstName: string | null;
-            lastName: string | null;
-            balance: number;
-        };
+            teacherId: string;
+            subjectId: string;
+            price: number | null;
+            duration: number;
+            studentId: string;
+            startsAt: Date;
+            status: import(".prisma/client").$Enums.LessonStatus;
+            channel: import(".prisma/client").$Enums.LessonChannel;
+            channelLink: string | null;
+            note: string | null;
+        } | {
+            id: string;
+            teacherId: string;
+            subjectId: string;
+            price: number | null;
+            duration: number;
+            studentId: string;
+            startsAt: Date;
+            status: import(".prisma/client").$Enums.LessonStatus;
+            channel: import(".prisma/client").$Enums.LessonChannel;
+            channelLink: string | null;
+            note: string | null;
+        })[] | ({
+            meta: import(".prisma/client/runtime/library").JsonValue | null;
+            type: import(".prisma/client").$Enums.TxType | null;
+            reason: string | null;
+            id: string;
+            createdAt: Date;
+            userId: string;
+            delta: number;
+            adminId: string | null;
+        } | {
+            meta: import(".prisma/client/runtime/library").JsonValue | null;
+            type: import(".prisma/client").$Enums.TxType | null;
+            reason: string | null;
+            id: string;
+            createdAt: Date;
+            userId: string;
+            delta: number;
+            adminId: string | null;
+        })[] | ({
+            id: string;
+            createdAt: Date;
+            teacherId: string;
+            status: import(".prisma/client").$Enums.WithdrawStatus;
+            amount: number;
+            notes: string | null;
+            resolvedAt: Date | null;
+        } | {
+            id: string;
+            createdAt: Date;
+            teacherId: string;
+            status: import(".prisma/client").$Enums.WithdrawStatus;
+            amount: number;
+            notes: string | null;
+            resolvedAt: Date | null;
+        })[] | {
+            id: string;
+            teacherId: string;
+            subjectId: string;
+            price: number | null;
+            duration: number;
+            studentId: string;
+            startsAt: Date;
+            status: import(".prisma/client").$Enums.LessonStatus;
+            channel: import(".prisma/client").$Enums.LessonChannel;
+            channelLink: string | null;
+            note: string | null;
+        }[] | {
+            meta: import(".prisma/client/runtime/library").JsonValue | null;
+            type: import(".prisma/client").$Enums.TxType | null;
+            reason: string | null;
+            id: string;
+            createdAt: Date;
+            userId: string;
+            delta: number;
+            adminId: string | null;
+        }[] | {
+            id: string;
+            createdAt: Date;
+            teacherId: string;
+            status: import(".prisma/client").$Enums.WithdrawStatus;
+            amount: number;
+            notes: string | null;
+            resolvedAt: Date | null;
+        }[];
+        [x: number]: never;
+        [x: symbol]: never;
     }>;
-    setPassword(id: string, body: {
-        newPassword?: string;
-    }): Promise<{
-        ok: boolean;
+    changePassword(id: string, body?: any): Promise<{
+        id: string;
+        login: string;
+        email: string | null;
+        phone: string | null;
+        passwordHash: string;
+        role: import(".prisma/client").$Enums.Role;
+        firstName: string | null;
+        lastName: string | null;
+        tz: string;
+        balance: number;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     balance(id: string): Promise<{
         balance: number;
+        currency: string;
     }>;
     remove(id: string): Promise<{
         ok: boolean;

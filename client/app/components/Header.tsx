@@ -209,13 +209,13 @@ function AltHeader() {
               ]}
             />
             <StaticDropdown
-              title="О школе"
-              items={[
-                { title: 'О школе', href: '/about' },
-                { title: 'Контакты', href: '/contacts' },
-                { title: 'Правовые документы', href: '/legal' },
-              ]}
-            />
+            title="О нас"
+            items={[
+              { title: 'О школе', href: '/about' },
+              { title: 'Контакты', href: '/contacts' },
+              { title: 'Правовые документы', href: '/legal' },
+            ]}
+          />
             <li className={styles.menuItem}>
               <Link className={`${styles.navLink} inline-flex items-center px-3 py-2`} href="/faq">Вопросы и ответы</Link>
             </li>

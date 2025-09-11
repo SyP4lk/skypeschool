@@ -16,16 +16,16 @@ export declare class AdminController {
             createdAt: Date;
         }[];
         recentChanges: {
+            reason: string | null;
+            id: string;
             user: {
                 id: string;
                 login: string;
                 firstName: string | null;
                 lastName: string | null;
             };
-            id: string;
             createdAt: Date;
             delta: number;
-            reason: string | null;
         }[];
     }>;
 }

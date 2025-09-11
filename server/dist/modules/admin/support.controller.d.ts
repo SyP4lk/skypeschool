@@ -4,11 +4,11 @@ export declare class AdminSupportController {
     constructor(prisma: PrismaService);
     list(status?: 'new' | 'processed'): Promise<{
         items: {
+            message: string;
             id: string;
             createdAt: Date;
             status: import(".prisma/client").$Enums.InboxStatus;
             contact: string | null;
-            message: string;
             fromLogin: string | null;
         }[];
     }>;

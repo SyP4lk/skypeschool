@@ -8,17 +8,17 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TeachersModule = void 0;
 const common_1 = require("@nestjs/common");
-const teachers_service_1 = require("./teachers.service");
-const teachers_controller_1 = require("./teachers.controller");
 const prisma_service_1 = require("../../prisma.service");
+const teacher_lessons_controller_1 = require("./teacher-lessons.controller");
+const teacher_me_controller_1 = require("./teacher-me.controller");
 const admin_teachers_controller_1 = require("./admin-teachers.controller");
 let TeachersModule = class TeachersModule {
 };
 exports.TeachersModule = TeachersModule;
 exports.TeachersModule = TeachersModule = __decorate([
     (0, common_1.Module)({
-        controllers: [teachers_controller_1.TeachersController, admin_teachers_controller_1.AdminTeachersController],
-        providers: [teachers_service_1.TeachersService, prisma_service_1.PrismaService],
+        controllers: [teacher_lessons_controller_1.TeacherLessonsController, teacher_me_controller_1.TeacherMeController, admin_teachers_controller_1.AdminTeachersController],
+        providers: [prisma_service_1.PrismaService],
     })
 ], TeachersModule);
 //# sourceMappingURL=teachers.module.js.map

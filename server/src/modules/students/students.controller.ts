@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Delete, UseGuards, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Delete, UseGuards, BadRequestException, Query } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import * as argon2 from 'argon2';
 import { JwtAuthGuard } from '../auth/jwt.guard';
@@ -10,17 +10,33 @@ import { RolesGuard } from '../common/roles.guard';
 export class StudentsController {
   constructor(private prisma: PrismaService) {}
 
-   @Get()
-  async list() {
+  // Список/поиск учеников: /students?q=&limit=
+  @Get()
+  async list(@Query('q') q?: string, @Query('limit') limit?: string) {
+    const take = Math.max(1, Math.min(Number(limit ?? 20), 50));
+    const search = (q ?? '').trim();
+
     return this.prisma.user.findMany({
       where: {
-        role: 'student', NOT: { login: { contains: '__deleted__' } } , // <— скрываем soft-deleted
+        role: 'student',
+        // скрываем soft-deleted (логин меняем на __deleted__* в remove)
+        NOT: { login: { contains: '__deleted__' } },
+        ...(search
+          ? {
+              OR: [
+                { login: { contains: search, mode: 'insensitive' } },
+                { firstName: { contains: search, mode: 'insensitive' } },
+                { lastName: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } },
+                { phone: { contains: search, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
       },
-      select: {
-        id: true, login: true, firstName: true, lastName: true,
-        tz: true, balance: true, createdAt: true, studentProfile: true,
-      },
+      // для выпадающего списка достаточно этих полей
+      select: { id: true, login: true, firstName: true, lastName: true },
       orderBy: { createdAt: 'desc' },
+      take,
     });
   }
 

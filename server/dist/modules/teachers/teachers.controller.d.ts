@@ -2,10 +2,14 @@ import { PrismaService } from '../../prisma.service';
 export declare class TeachersController {
     private prisma;
     constructor(prisma: PrismaService);
+    private saveUpload;
+    private parseSubjects;
     list(): Promise<({
         user: {
             id: string;
             login: string;
+            email: string | null;
+            phone: string | null;
             firstName: string | null;
             lastName: string | null;
             balance: number;
@@ -39,11 +43,20 @@ export declare class TeachersController {
         education: string | null;
         isActive: boolean;
         sortOrder: number;
+        contactVk: string | null;
+        contactTelegram: string | null;
+        contactWhatsapp: string | null;
+        contactZoom: string | null;
+        contactTeams: string | null;
+        contactDiscord: string | null;
+        contactMax: string | null;
     })[]>;
     one(id: string): Promise<({
         user: {
             id: string;
             login: string;
+            email: string | null;
+            phone: string | null;
             passwordHash: string;
             role: import(".prisma/client").$Enums.Role;
             firstName: string | null;
@@ -82,31 +95,21 @@ export declare class TeachersController {
         education: string | null;
         isActive: boolean;
         sortOrder: number;
+        contactVk: string | null;
+        contactTelegram: string | null;
+        contactWhatsapp: string | null;
+        contactZoom: string | null;
+        contactTeams: string | null;
+        contactDiscord: string | null;
+        contactMax: string | null;
     }) | null>;
-    create(body: {
+    create(file: Express.Multer.File, body: any): Promise<{
+        ok: boolean;
+        profileId: string;
         userId: string;
-        aboutShort?: string;
-        isActive?: boolean;
-        sortOrder?: number;
-    }): Promise<{
-        id: string;
-        userId: string;
-        photo: string | null;
-        aboutShort: string | null;
-        aboutFull: string | null;
-        education: string | null;
-        isActive: boolean;
-        sortOrder: number;
     }>;
-    update(id: string, data: any): Promise<{
-        id: string;
-        userId: string;
-        photo: string | null;
-        aboutShort: string | null;
-        aboutFull: string | null;
-        education: string | null;
-        isActive: boolean;
-        sortOrder: number;
+    update(id: string, file: Express.Multer.File, body: any): Promise<{
+        ok: boolean;
     }>;
     addSubject(teacherId: string, body: {
         subjectId: string;
@@ -120,6 +123,9 @@ export declare class TeachersController {
         duration: number;
     }>;
     removeLink(linkId: string): Promise<{
+        ok: boolean;
+    }>;
+    removeProfile(id: string): Promise<{
         ok: boolean;
     }>;
 }

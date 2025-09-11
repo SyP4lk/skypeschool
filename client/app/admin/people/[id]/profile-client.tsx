@@ -1,127 +1,180 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api } from '../../_lib/api';
-import Input from '@/components/ui/Input';
-import { Card, CardTitle } from '@/components/ui/Card';
-import Select from '@/components/ui/Select';
-import { mediaUrl } from '@/lib/media';
+
+const API_BASE = '';
+async function api<T = any>(path: string, init: RequestInit = {}): Promise<T> {
+  const res = await fetch(`${API_BASE}/api${path}`, {
+    credentials: 'include',
+    cache: 'no-store',
+    ...init,
+    headers: {
+      Accept: 'application/json',
+      ...(init.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
+      ...(init.headers || {}),
+    },
+  });
+  const text = await res.text().catch(() => '');
+  if (!res.ok) {
+    try { throw new Error(JSON.parse(text)?.message || res.statusText); }
+    catch { throw new Error(text || res.statusText); }
+  }
+  try { return JSON.parse(text) as T; } catch { return text as unknown as T; }
+}
 
 type Role = 'student' | 'teacher';
-type User = { id: string; login: string; firstName: string|null; lastName: string|null; role: 'student'|'teacher'|'admin'; balance: number };
+type User = {
+  id: string; login: string; role: 'student'|'teacher'|'admin';
+  firstName: string|null; lastName: string|null; phone?: string|null; email?: string|null;
+};
+
 type StudentProfile = {
-  avatar?: string|null;
   contactSkype?: string|null; contactVk?: string|null; contactGoogle?: string|null;
   contactWhatsapp?: string|null; contactMax?: string|null; contactDiscord?: string|null;
+  // возможный вариант поля в БД
+  contactWhatsApp?: string|null;
+  avatar?: string|null;
 };
 type Subject = { id: string; name: string };
 
-function validateImage(f: File | null, setError: (s: string)=>void) {
-  if (!f) return null;
-  const MAX = 5 * 1024 * 1024;
-  const okTypes = ['image/jpeg','image/jpg','image/png'];
-  const okExts = ['.jpg','.jpeg','.png'];
-  const name = f.name.toLowerCase();
-  const extOk = okExts.some(ext => name.endsWith(ext));
-  const typeOk = okTypes.includes(f.type);
-  if (!extOk || !typeOk) { setError('Только JPG/PNG до 5 МБ'); return null; }
-  if (f.size > MAX) { setError('Файл больше 5 МБ'); return null; }
-  return f;
-}
-
 export default function ProfileClient({ id, role }: { id: string; role: Role }) {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<StudentProfile | null>(null);
-  const [firstName, setFirst] = useState(''); const [lastName, setLast] = useState('');
-  const [pwd, setPwd] = useState('');
-  const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  // student contacts
-  const [c, setC] = useState<StudentProfile>({});
+  const [firstName, setFirst] = useState(''); const [lastName, setLast] = useState('');
+  const [phone, setPhone] = useState(''); const [email, setEmail] = useState('');
+  const [pwd, setPwd] = useState('');
 
-  // TEACHER
+  // student
+  const [profile, setProfile] = useState<StudentProfile | null>(null);
+
+  // teacher
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [teacherProfileId, setTeacherProfileId] = useState<string>('');
-  const [tAbout, setTAbout] = useState<string>('');
-  const [tPhotoUrl, setTPhotoUrl] = useState<string | null>(null);
-  const [tPhotoFile, setTPhotoFile] = useState<File | null>(null);
-  const [tSubjectId, setTSubjectId] = useState<string>('');
-  const [tDuration, setTDuration] = useState<string>('');
-  const [tPrice, setTPrice] = useState<string>('');
-  // teacher contacts
-  const [tContactSkype, setTContactSkype] = useState('');
-  const [tContactVk, setTContactVk] = useState('');
-  const [tContactGoogle, setTContactGoogle] = useState('');
-  const [tContactWhatsapp, setTContactWhatsapp] = useState('');
-  const [tContactMax, setTContactMax] = useState('');
-  const [tContactDiscord, setTContactDiscord] = useState('');
+  const [teacherProfileId, setTeacherProfileId] = useState<string>(''); // ⬅ сюда кладём userId (fallback на id)
+  const [about, setAbout] = useState('');
+  const [photoFile, setPhotoFile] = useState<File | null>(null); // заглушка
+  const [subjId, setSubjId] = useState('');
+  const [duration, setDuration] = useState('');
+  const [priceRub, setPriceRub] = useState(''); // РУБЛИ!
+  // контакты преподавателя
+  const [tContacts, setTContacts] = useState({
+    contactVk: '', contactTelegram: '', contactWhatsapp: '',
+    contactZoom: '', contactTeams: '', contactDiscord: '', contactMax: '',
+  });
 
   async function load() {
     setErr(null); setMsg(null);
     try {
       if (role === 'student') {
-        const r = await api(`/admin/students/${id}`);
-        setUser(r.user); setProfile(r.profile || null);
-        setFirst(r.user.firstName || ''); setLast(r.user.lastName || '');
-        setC({
-          contactSkype: r.profile?.contactSkype || '',
-          contactVk: r.profile?.contactVk || '',
-          contactGoogle: r.profile?.contactGoogle || '',
-          contactWhatsapp: r.profile?.contactWhatsapp || '',
-          contactMax: r.profile?.contactMax || '',
-          contactDiscord: r.profile?.contactDiscord || '',
+        const r = await api<{ user: User; profile?: StudentProfile }>(`/admin/students/${id}`);
+        setUser(r.user); setFirst(r.user.firstName || ''); setLast(r.user.lastName || '');
+        setPhone(r.user.phone || ''); setEmail(r.user.email || '');
+        // нормализуем возможные варианты имён полей
+        const p = r.profile || {};
+        setProfile({
+          contactSkype: p?.contactSkype ?? '',
+          contactVk: p?.contactVk ?? '',
+          contactGoogle: p?.contactGoogle ?? '',
+          contactWhatsapp: (p as any)?.contactWhatsapp ?? (p as any)?.contactWhatsApp ?? '',
+          contactMax: p?.contactMax ?? '',
+          contactDiscord: p?.contactDiscord ?? '',
+          avatar: (p as any)?.avatar ?? null,
         });
       } else {
-        const u = await api(`/admin/users/${id}`);
-        setUser(u.user);
-        setFirst(u.user.firstName || ''); setLast(u.user.lastName || '');
+        const u = await api<{ user: User }>(`/admin/users/${id}`);
+        setUser(u.user); setFirst(u.user.firstName || ''); setLast(u.user.lastName || '');
+        setPhone(u.user.phone || ''); setEmail(u.user.email || '');
 
-        const list = await api<any[]>('/admin/teachers');
-        const me = (Array.isArray(list) ? list : []).find((t) => t?.user?.id === id);
+        // список «преподавателей»
+        const list = await api<any[]>(`/admin/teachers`);
+        const me = (Array.isArray(list) ? list : []).find(t => t?.user?.id === id || t?.userId === id);
         if (!me) throw new Error('Профиль преподавателя не найден');
-        setTeacherProfileId(me.id);
 
-        const d = await api(`/admin/teachers/${me.id}`);
-        setTAbout(d?.aboutShort || '');
-        setTPhotoUrl(d?.photo || null);
+        // ⬇ КЛЮЧ ДЛЯ /admin/teachers/:id — userId, иначе id (устраняет 404 teacher_not_found)
+        const teacherKey: string = me.userId || me.id;
+        setTeacherProfileId(teacherKey);
+
+        const d = await api<any>(`/admin/teachers/${teacherKey}`);
+        setAbout(d?.aboutShort || '');
         const ts = Array.isArray(d?.teacherSubjects) ? d.teacherSubjects : [];
         if (ts[0]) {
-          setTSubjectId(ts[0].subjectId || '');
-          setTDuration(String(ts[0].duration || ''));
-          setTPrice(String(ts[0].price || ''));
-        } else {
-          setTSubjectId(''); setTDuration(''); setTPrice('');
-        }
-        // contacts (если бэк вернёт — подставим, иначе пусто)
-        setTContactSkype(d?.contactSkype || '');
-        setTContactVk(d?.contactVk || '');
-        setTContactGoogle(d?.contactGoogle || '');
-        setTContactWhatsapp(d?.contactWhatsapp || '');
-        setTContactMax(d?.contactMax || '');
-        setTContactDiscord(d?.contactDiscord || '');
+          setSubjId(ts[0].subjectId || '');
+          setDuration(String(ts[0].duration || ''));
+          setPriceRub(String(ts[0].price || ''));
+        } else { setSubjId(''); setDuration(''); setPriceRub(''); }
 
-        const subs = await api('/subjects');
-        setSubjects(Array.isArray(subs) ? subs : subs.items || []);
+        setTContacts({
+          contactVk: d?.contactVk || '',
+          contactTelegram: d?.contactTelegram || '',
+          contactWhatsapp: d?.contactWhatsapp || '',
+          contactZoom: d?.contactZoom || '',
+          contactTeams: d?.contactTeams || '',
+          contactDiscord: d?.contactDiscord || '',
+          contactMax: d?.contactMax || '',
+        });
+
+        const subs = await api<Subject[] | { items: Subject[] }>(`/subjects`);
+        setSubjects(Array.isArray(subs) ? subs : (subs.items ?? []));
       }
     } catch (e: any) {
       setErr(e?.message || String(e));
     }
   }
+  useEffect(() => { void load(); }, [id, role]);
 
-  useEffect(() => { load(); }, [id, role]);
-
-  async function saveNames() {
+  async function saveGeneral() {
     try {
+      await api(`/admin/users/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ firstName, lastName, phone: phone || null, email: email || null }),
+      });
+      setMsg('Сохранено'); await load();
+    } catch (e: any) { setErr(e?.message || String(e)); }
+  }
+
+  async function setPassword() {
+    try {
+      if (!pwd || pwd.length < 8) throw new Error('Пароль минимум 8 символов');
       if (role === 'student') {
-        await api(`/admin/students/${id}`, {
-          method: 'PATCH', body: JSON.stringify({ firstName, lastName, ...c }),
-        });
+        await api(`/admin/students/${id}/password`, { method: 'POST', body: JSON.stringify({ newPassword: pwd }) });
       } else {
-        await api(`/admin/users/${id}`, {
-          method: 'PATCH', body: JSON.stringify({ firstName, lastName }),
-        });
+        await api(`/admin/users/${id}/password`, { method: 'POST', body: JSON.stringify({ password: pwd }) });
       }
+      setMsg('Пароль сохранён'); setPwd('');
+    } catch (e: any) { setErr(e?.message || String(e)); }
+  }
+
+  async function saveStudent() {
+    setErr(null); setMsg(null);
+    try {
+      // 1) пользовательские поля
+      await api(`/admin/users/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          firstName: (firstName || '').trim(),
+          lastName:  (lastName  || '').trim(),
+          phone: phone || null,
+          email: email || null,
+        }),
+      });
+
+      // 2) контакты профиля (дублируем ключи для совместимости со схемой)
+      const p: any = profile || {};
+      const contacts = {
+        contactSkype: p.contactSkype || null,
+        contactVk: p.contactVk || null,
+        contactGoogle: p.contactGoogle || null,
+        contactWhatsapp: p.contactWhatsapp ?? p.contactWhatsApp ?? null,
+        contactWhatsApp: p.contactWhatsApp ?? p.contactWhatsapp ?? null,
+        contactMax: p.contactMax || null,
+        contactDiscord: p.contactDiscord || null,
+      };
+      await api(`/admin/students/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(contacts),
+      });
+
       setMsg('Сохранено');
       await load();
     } catch (e: any) {
@@ -129,178 +182,119 @@ export default function ProfileClient({ id, role }: { id: string; role: Role }) 
     }
   }
 
-  async function setPassword() {
+  async function saveTeacher() {
+    if (!teacherProfileId) return;
     try {
-      if (!pwd || pwd.length < 8) throw new Error('Пароль минимум 8 символов');
-      if (role === 'student') {
-        const r = await api(`/admin/students/${id}/password`, { method: 'POST', body: JSON.stringify({ newPassword: pwd }) });
-        setMsg(`Пароль задан: ${r.newPassword}`);
-      } else {
-        await api(`/admin/users/${id}/password`, { method: 'POST', body: JSON.stringify({ newPassword: pwd }) });
-        setMsg('Пароль обновлён');
-      }
-      setPwd('');
-    } catch (e: any) {
-      setErr(e?.message || String(e));
-    }
-  }
+      // ⬇ Формируем JSON вместо FormData (загрузка фото отключена)
+      const durationNum = parseInt(duration, 10);
+      const priceNum = parseInt((priceRub || '0').replace(',', '.'));
+      const list = (subjId && durationNum && priceNum)
+        ? [{ subjectId: subjId, duration: durationNum, price: priceNum }]
+        : [];
 
-  async function saveTeacherProfile() {
-    try {
-      if (!teacherProfileId) throw new Error('Не найден ID профиля преподавателя');
-      const priceNum = Math.round(Number(tPrice));
-      const durationNum = parseInt(tDuration, 10);
-      if (!tSubjectId) throw new Error('Выберите предмет');
-      if (!Number.isFinite(priceNum) || priceNum <= 0) throw new Error('Цена должна быть положительным числом');
-      if (!Number.isFinite(durationNum) || durationNum <= 0) throw new Error('Длительность должна быть положительным числом (мин)');
+      const payload = {
+        aboutShort: about || '',
+        teacherSubjects: list,
+        // контакты можно оставить — бэкенд лишнее проигнорирует, пригодится на будущее
+        ...tContacts,
+      };
 
-      const fd = new FormData();
-      if (firstName) fd.append('firstName', firstName);
-      if (lastName) fd.append('lastName', lastName);
-      if (tAbout) fd.append('aboutShort', tAbout);
-      if (tPhotoFile) {
-        const ok = validateImage(tPhotoFile, setErr);
-        if (!ok) throw new Error('Только JPG/PNG до 5 МБ');
-        fd.append('photo', ok);
-      }
+      await api(`/admin/teachers/${teacherProfileId}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
 
-      // контакты преподавателя — отправляем строками (бэк начнёт сохранять после расширения DTO/схемы)
-      if (tContactSkype) fd.append('contactSkype', tContactSkype);
-      if (tContactVk) fd.append('contactVk', tContactVk);
-      if (tContactGoogle) fd.append('contactGoogle', tContactGoogle);
-      if (tContactWhatsapp) fd.append('contactWhatsapp', tContactWhatsapp);
-      if (tContactMax) fd.append('contactMax', tContactMax);
-      if (tContactDiscord) fd.append('contactDiscord', tContactDiscord);
+      // телефон/e-mail сохраняем на user
+      await api(`/admin/users/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ phone: phone || null, email: email || null }),
+      });
 
-      fd.append('teacherSubjects', JSON.stringify([{ subjectId: tSubjectId, price: priceNum, duration: durationNum }]));
-
-      const base = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/+$/, '');
-      const res = await fetch(`${base}/admin/teachers/${teacherProfileId}`, { method: 'PUT', body: fd, credentials: 'include' });
-      const raw = await res.text();
-      if (!res.ok) {
-        try { const j = JSON.parse(raw); throw new Error(j?.message || raw || res.statusText); }
-        catch { throw new Error(raw || res.statusText); }
-      }
-
-      setMsg('Профиль преподавателя сохранён');
-      setTPhotoFile(null);
+      setMsg('Сохранено');
       await load();
-    } catch (e: any) {
-      setErr(e?.message || String(e));
-    }
-  }
-
-  async function uploadAvatar(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = validateImage(e.target.files?.[0] || null, setErr);
-    if (!file) { e.currentTarget.value = ''; return; }
-    const fd = new FormData(); fd.append('file', file);
-    try {
-      await api(`/admin/students/${id}/avatar`, { method: 'POST', body: fd });
-      setMsg('Аватар обновлён'); await load();
     } catch (e: any) { setErr(e?.message || String(e)); }
-    finally { e.currentTarget.value = ''; }
   }
 
   if (!user) return <div className="text-gray-500">Загрузка…</div>;
 
   return (
     <div className="grid gap-6">
-      <Card>
-        <CardTitle>Профиль пользователя</CardTitle>
-
-        <div className="grid md:grid-cols-2 gap-4">
-          <div><label className="text-sm block">Имя</label><Input value={firstName} onChange={e=>setFirst(e.target.value)} /></div>
-          <div><label className="text-sm block">Фамилия</label><Input value={lastName} onChange={e=>setLast(e.target.value)} /></div>
-          <div><label className="text-sm block">Логин</label><div className="p-2 border rounded bg-gray-50">{user.login}</div></div>
-          <div><label className="text-sm block">Роль</label><div className="p-2 border rounded bg-gray-50">{user.role}</div></div>
-          <div><label className="text-sm block">Баланс</label><div className="p-2 border rounded bg-gray-50">{(user.balance/100).toFixed(2)} ₽</div></div>
+      <section className="rounded-xl border p-4">
+        <div className="font-semibold mb-3">Профиль</div>
+        <div className="grid md:grid-cols-2 gap-3">
+          <div><label className="text-sm block mb-1">Имя</label><input className="w-full rounded border px-3 py-2" value={firstName} onChange={e=>setFirst(e.target.value)} /></div>
+          <div><label className="text-sm block mb-1">Фамилия</label><input className="w-full rounded border px-3 py-2" value={lastName} onChange={e=>setLast(e.target.value)} /></div>
+          <div><label className="text-sm block mb-1">Телефон</label><input className="w-full rounded border px-3 py-2" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+7..." /></div>
+          <div><label className="text-sm block mb-1">E-mail</label><input className="w-full rounded border px-3 py-2" value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@example.com" /></div>
         </div>
-
-        {role === 'student' && (
-          <>
-            <div className="mt-6 grid md:grid-cols-2 gap-4">
-              <div><label className="text-sm block">Skype</label><Input value={c.contactSkype || ''} onChange={e=>setC({ ...c, contactSkype: e.target.value })} /></div>
-              <div><label className="text-sm block">VK</label><Input value={c.contactVk || ''} onChange={e=>setC({ ...c, contactVk: e.target.value })} /></div>
-              <div><label className="text-sm block">Google Meet</label><Input value={c.contactGoogle || ''} onChange={e=>setC({ ...c, contactGoogle: e.target.value })} /></div>
-              <div><label className="text-sm block">WhatsApp</label><Input value={c.contactWhatsapp || ''} onChange={e=>setC({ ...c, contactWhatsapp: e.target.value })} /></div>
-              <div><label className="text-sm block">MAX</label><Input value={c.contactMax || ''} onChange={e=>setC({ ...c, contactMax: e.target.value })} /></div>
-              <div><label className="text-sm block">Discord</label><Input value={c.contactDiscord || ''} onChange={e=>setC({ ...c, contactDiscord: e.target.value })} /></div>
-            </div>
-
-            <div className="mt-6">
-              <label className="text-sm block mb-1">Аватар</label>
-              <div className="flex items-center gap-4">
-                <img src={profile?.avatar ? mediaUrl(profile.avatar) : '/avatar-placeholder.png'} alt="avatar" className="w-16 h-16 rounded-full object-cover border" />
-                <input type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" onChange={uploadAvatar} />
-              </div>
-            </div>
-          </>
-        )}
-
-        {role === 'teacher' && (
-          <>
-            <div className="mt-6 grid md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="text-sm block mb-1">Краткое описание</label>
-                <textarea value={tAbout} onChange={(e) => setTAbout(e.target.value)} className="w-full min-h-[90px] rounded border px-3 py-2" placeholder="Пара предложений о преподавателе" />
-              </div>
-
-              <div>
-                <label className="text-sm block mb-1">Фото</label>
-                <div className="flex items-center gap-4">
-                  <img src={tPhotoUrl ? mediaUrl(tPhotoUrl) : '/avatar-placeholder.png'} alt="teacher" className="w-16 h-16 rounded object-cover border" />
-                  <input type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" onChange={(e) => {
-                    const ok = validateImage(e.target.files?.[0] || null, setErr);
-                    setTPhotoFile(ok || null);
-                  }} />
-                </div>
-                <p className="text-xs text-gray-500 mt-1">Новый файл прикрепляйте при необходимости замены.</p>
-              </div>
-
-              <div>
-                <label className="text-sm block mb-1">Предмет</label>
-                <Select value={tSubjectId} onChange={(e) => setTSubjectId(e.target.value)}>
-                  <option value="">— выбрать —</option>
-                  {subjects.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
-                </Select>
-              </div>
-              <div><label className="text-sm block mb-1">Длительность, мин</label><Input type="number" min={1} value={tDuration} onChange={(e) => setTDuration(e.target.value)} placeholder="Напр. 60" /></div>
-              <div><label className="text-sm block mb-1">Цена, ₽</label><Input type="number" min={1} value={tPrice} onChange={(e) => setTPrice(e.target.value)} placeholder="Напр. 1500" /></div>
-            </div>
-
-            {/* Контакты преподавателя */}
-            <div className="mt-6 grid md:grid-cols-2 gap-4">
-              <div><label className="text-sm block">Skype</label><Input value={tContactSkype} onChange={(e) => setTContactSkype(e.target.value)} /></div>
-              <div><label className="text-sm block">VK</label><Input value={tContactVk} onChange={(e) => setTContactVk(e.target.value)} /></div>
-              <div><label className="text-sm block">Google Meet</label><Input value={tContactGoogle} onChange={(e) => setTContactGoogle(e.target.value)} /></div>
-              <div><label className="text-sm block">WhatsApp</label><Input value={tContactWhatsapp} onChange={(e) => setTContactWhatsapp(e.target.value)} /></div>
-              <div><label className="text-sm block">MAX</label><Input value={tContactMax} onChange={(e) => setTContactMax(e.target.value)} /></div>
-              <div><label className="text-sm block">Discord</label><Input value={tContactDiscord} onChange={(e) => setTContactDiscord(e.target.value)} /></div>
-            </div>
-
-            <div className="mt-4">
-              <button className="px-3 py-2 rounded bg-black text-white" onClick={saveTeacherProfile}>
-                Сохранить профиль преподавателя
-              </button>
-            </div>
-          </>
-        )}
-
-        <div className="mt-6 flex items-center gap-3">
-          <button className="px-3 py-2 rounded bg-black text-white" onClick={saveNames}>Сохранить</button>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            className="px-3 py-2 rounded border"
+            onClick={role === 'student' ? saveStudent : saveGeneral}
+          >
+            Сохранить
+          </button>
+          <input className="rounded border px-3 py-2" placeholder="новый пароль" value={pwd} onChange={e=>setPwd(e.target.value)} />
+          <button className="px-3 py-2 rounded border" onClick={setPassword}>Задать пароль</button>
           {msg && <span className="text-green-700 text-sm">{msg}</span>}
           {err && <span className="text-red-600 text-sm">{err}</span>}
         </div>
-      </Card>
+      </section>
 
-      <Card>
-        <CardTitle>Задать пароль</CardTitle>
-        <div className="flex items-center gap-3">
-          <Input placeholder="мин. 8 символов" value={pwd} onChange={e=>setPwd(e.target.value)} />
-          <button className="px-3 py-2 rounded bg-black text-white" onClick={setPassword}>Обновить</button>
-        </div>
-        <p className="text-xs text-gray-500 mt-2">Пароль не показываем — только задаём новый.</p>
-      </Card>
+      {role === 'teacher' ? (
+        <section className="rounded-xl border p-4">
+          <div className="font-semibold mb-3">Данные преподавателя</div>
+          <div className="grid md:grid-cols-3 gap-3">
+            <div className="md:col-span-3">
+              <label className="text-sm block mb-1">Короткое описание</label>
+              <input className="w-full rounded border px-3 py-2" value={about} onChange={e=>setAbout(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-sm block mb-1">Фото</label>
+              {/* ⬇ заглушка */}
+              <input type="file" accept="image/*" disabled className="opacity-50 cursor-not-allowed" onChange={e=>setPhotoFile(e.currentTarget.files?.[0] || null)} />
+              <p className="text-xs text-gray-500 mt-1">Загрузка фото временно отключена</p>
+            </div>
+            <div>
+              <label className="text-sm block mb-1">Предмет</label>
+              <select className="w-full rounded border px-3 py-2" value={subjId} onChange={e=>setSubjId(e.target.value)}>
+                <option value="">— выберите —</option>
+                {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div><label className="text-sm block mb-1">Длительность (мин)</label><input className="w-full rounded border px-3 py-2" value={duration} onChange={e=>setDuration(e.target.value)} /></div>
+            <div><label className="text-sm block mb-1">Цена (₽)</label><input className="w-full rounded border px-3 py-2" value={priceRub} onChange={e=>setPriceRub(e.target.value)} /></div>
+
+            {/* Контакты преподавателя */}
+            <div><label className="text-sm block mb-1">VK</label><input className="w-full rounded border px-3 py-2" value={tContacts.contactVk} onChange={e=>setTContacts({...tContacts, contactVk:e.target.value})} /></div>
+            <div><label className="text-sm block mb-1">Telegram</label><input className="w-full rounded border px-3 py-2" value={tContacts.contactTelegram} onChange={e=>setTContacts({...tContacts, contactTelegram:e.target.value})} /></div>
+            <div><label className="text-sm block mb-1">WhatsApp</label><input className="w-full rounded border px-3 py-2" value={tContacts.contactWhatsapp} onChange={e=>setTContacts({...tContacts, contactWhatsapp:e.target.value})} /></div>
+            <div><label className="text-sm block mb-1">Zoom</label><input className="w-full rounded border px-3 py-2" value={tContacts.contactZoom} onChange={e=>setTContacts({...tContacts, contactZoom:e.target.value})} /></div>
+            <div><label className="text-sm block mb-1">Microsoft Teams</label><input className="w-full rounded border px-3 py-2" value={tContacts.contactTeams} onChange={e=>setTContacts({...tContacts, contactTeams:e.target.value})} /></div>
+            <div><label className="text-sm block mb-1">Discord</label><input className="w-full rounded border px-3 py-2" value={tContacts.contactDiscord} onChange={e=>setTContacts({...tContacts, contactDiscord:e.target.value})} /></div>
+            <div><label className="text-sm block mb-1">MAX</label><input className="w-full rounded border px-3 py-2" value={tContacts.contactMax} onChange={e=>setTContacts({...tContacts, contactMax:e.target.value})} /></div>
+          </div>
+
+          <div className="mt-3"><button className="px-3 py-2 rounded border" onClick={saveTeacher}>Сохранить</button></div>
+        </section>
+      ) : (
+        <section className="rounded-xl border p-4">
+          <div className="font-semibold mb-3">Контакты ученика</div>
+          <div className="grid md:grid-cols-3 gap-3">
+            {['contactSkype','contactVk','contactGoogle','contactWhatsapp','contactMax','contactDiscord'].map((key) => (
+              <div key={key}>
+                <label className="text-sm block mb-1">{key.replace('contact','')}</label>
+                <input
+                  className="w-full rounded border px-3 py-2"
+                  value={(profile as any)?.[key] || ''}
+                  onChange={(e)=>setProfile(prev=>({...(prev||{}), [key]: e.target.value}))}
+                />
+              </div>
+            ))}
+          </div>
+          {/* Кнопки не дублируем — сохраняем верхней кнопкой */}
+        </section>
+      )}
     </div>
   );
 }

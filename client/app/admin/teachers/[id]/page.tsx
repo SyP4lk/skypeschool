@@ -32,7 +32,7 @@ export default function EditTeacherPage() {
   useEffect(() => {
     if (!id) return;
     // загружаем список всех предметов
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/subjects`, {
+    fetch(`/api/subjects`, {
       credentials: "include",
     })
       .then((res) => res.json())
@@ -43,7 +43,7 @@ export default function EditTeacherPage() {
       })
       .catch(() => {});
     // загружаем данные преподавателя
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/teachers/${id}`, {
+    fetch(`/api/admin/teachers/${id}`, {
       credentials: "include",
     })
       .then((res) => res.json())
@@ -81,7 +81,7 @@ export default function EditTeacherPage() {
     if (photoFile) {
       formData.append("photo", photoFile);
     }
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/teachers/${id}`, {
+    const res = await fetch(`/api/admin/teachers/${id}`, {
       method: "PUT",
       credentials: "include",
       body: formData,
@@ -97,7 +97,7 @@ export default function EditTeacherPage() {
   async function handleDelete() {
     if (!id) return;
     if (!confirm("Удалить преподавателя?")) return;
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/teachers/${id}`, {
+    const res = await fetch(`/api/admin/teachers/${id}`, {
       method: "DELETE",
       credentials: "include",
     });

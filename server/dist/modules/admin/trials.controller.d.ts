@@ -4,13 +4,13 @@ export declare class AdminTrialsController {
     constructor(prisma: PrismaService);
     list(status?: 'new' | 'processed'): Promise<{
         items: {
+            message: string | null;
             name: string;
             id: string;
             createdAt: Date;
             subjectId: string | null;
             status: import(".prisma/client").$Enums.InboxStatus;
             contact: string | null;
-            message: string | null;
         }[];
     }>;
     setStatus(id: string, body: {

@@ -28,7 +28,7 @@ export default function NewTeacherPage() {
 
   // получаем список предметов при первой загрузке
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/subjects`, {
+    fetch(`/api/subjects`, {
       credentials: "include",
     })
       .then((res) => res.json())
@@ -40,22 +40,57 @@ export default function NewTeacherPage() {
       .catch(() => {});
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    // Формируем данные для отправки. Используем FormData для загрузки файла.
-    const formData = new FormData();
-    formData.append("login", login);
-    formData.append("password", password);
-    formData.append("firstName", firstName);
-    formData.append("lastName", lastName);
-    formData.append("aboutShort", aboutShort);
-    // teacherSubjects отправляем как строку JSON, сервер его распарсит
-    formData.append("teacherSubjects", JSON.stringify(teacherSubjects));
-    if (photoFile) {
-      formData.append("photo", photoFile);
+  async 
+function handleSubmit(e: React.FormEvent) {
+  e.preventDefault();
+  setError(null);
+  setSuccess(null);
+  (async () => {
+    try {
+      // 1) Create user as teacher
+      const userRes = await fetch(`/api/admin/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          login, password, role: 'teacher',
+          firstName: firstName || null, lastName: lastName || null,
+        }),
+      });
+      if (!userRes.ok) throw new Error(await userRes.text());
+      const newUser = await userRes.json();
+      const userId = newUser?.id;
+      if (!userId) throw new Error('user_not_created');
+
+      // 2) Ensure TeacherProfile exists
+      const tRes = await fetch(`/api/admin/teachers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ userId }),
+      });
+      if (!tRes.ok) throw new Error(await tRes.text());
+
+      // 3) Save profile fields (about + subjects). Photo upload is temporarily disabled.
+      const saveRes = await fetch(`/api/admin/teachers/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          aboutShort,
+          teacherSubjects,
+        }),
+      });
+      if (!saveRes.ok) throw new Error(await saveRes.text());
+
+      setSuccess('Создан преподаватель.');
+      router.push('/admin/teachers');
+    } catch (err: any) {
+      setError(err?.message || String(err));
     }
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/teachers`, {
+  })();
+}
+const res = await fetch(`/api/admin/teachers`, {
       method: "POST",
       credentials: "include",
       body: formData,

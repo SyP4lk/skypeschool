@@ -19,7 +19,7 @@ export default function TeachersAdminPage() {
   const [teachers, setTeachers] = useState<TeacherForAdmin[]>([]);
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/teachers`, {
+    fetch(`/api/admin/teachers`, {
       credentials: "include",
     })
       .then((res) => res.json())

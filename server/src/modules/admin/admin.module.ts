@@ -7,6 +7,8 @@ import { AdminStudentsController } from './students.controller';
 import { AdminTrialsController } from './trials.controller';
 import { AdminSupportController } from './support.controller';
 import { AdminOverviewController } from './overview.controller';
+import { AdminCategoriesController } from './admin-categories.controller';
+import { AdminTeachersController } from '../teachers/admin-teachers.controller';
 
 @Module({
   controllers: [
@@ -16,7 +18,8 @@ import { AdminOverviewController } from './overview.controller';
     AdminTrialsController,
     AdminSupportController,
     AdminOverviewController,
-    
+    AdminTeachersController,
+    AdminCategoriesController
   ],
   providers: [PrismaService, RolesGuard],
 })

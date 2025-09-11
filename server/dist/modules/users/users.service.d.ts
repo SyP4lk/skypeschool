@@ -5,6 +5,8 @@ export declare class UsersService {
     getById(id: string): import(".prisma/client").Prisma.Prisma__UserClient<{
         id: string;
         login: string;
+        email: string | null;
+        phone: string | null;
         passwordHash: string;
         role: import(".prisma/client").$Enums.Role;
         firstName: string | null;

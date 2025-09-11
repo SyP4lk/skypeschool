@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import './admin.css';
 
 const Link = ({ href, children }: { href: string; children: React.ReactNode }) => (
@@ -13,17 +13,20 @@ const Link = ({ href, children }: { href: string; children: React.ReactNode }) =
   </a>
 );
 
-type Me = { id: string; login: string; role: 'admin' | 'teacher' | 'student' };
-
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const [ready, setReady] = useState(false);
 
-  const apiBase = useMemo(
-    () => (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/+$/, ''),
-    []
-  );
+  // IMPORTANT: use local Next proxy to keep cookies/domain (3001) and avoid CORS
+  const apiBase = '/api';
+
+  async function logout() {
+    try {
+      await fetch(`${apiBase}/auth/logout`, { method: 'POST', credentials: 'include' });
+    } finally {
+      router.replace('/login');
+    }
+  }
 
   useEffect(() => {
     let aborted = false;
@@ -36,25 +39,23 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           cache: 'no-store',
         });
 
-        // Неавторизован — уводим на /login
         if (res.status === 401) {
           if (!aborted) router.replace('/login');
           return;
         }
-
         if (!res.ok) {
-          // Любая иная ошибка — на страницу логина
           if (!aborted) router.replace('/login');
           return;
         }
 
-        const me: Me = await res.json();
+        // сервер может вернуть { user: { role } } или { role }
+        const data = await res.json();
+        const role: string | undefined = data?.user?.role ?? data?.role;
 
-        if (me?.role !== 'admin') {
-          // Авторизован, но не админ — уводим в свой кабинет
+        if (role !== 'admin') {
           if (!aborted) {
-            if (me.role === 'teacher') router.replace('/teacher');
-            else router.replace('/student');
+            if (role === 'teacher') router.replace('/lk/teacher');
+            else router.replace('/lk/student');
           }
           return;
         }
@@ -66,24 +67,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
 
     guard();
-    return () => {
-      aborted = true;
-    };
-  }, [apiBase, router, pathname]);
-
-  async function logout() {
-    try {
-      await fetch(`${apiBase}/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } finally {
-      router.replace('/login');
-    }
-  }
+    return () => { aborted = true; };
+  }, [router]);
 
   if (!ready) {
-    // Мини-скелет без мерцания
+    // мини-скелет, чтобы не мигало
     return <div className="min-h-screen bg-gray-50" />;
   }
 

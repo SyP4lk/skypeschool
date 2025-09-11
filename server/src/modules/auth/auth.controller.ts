@@ -1,90 +1,101 @@
-import { Controller, Get, Post, Req, Res, UseGuards, HttpCode, BadRequestException } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { LocalAuthGuard } from './local.guard';
-import { JwtAuthGuard } from './jwt.guard';
-import { Response } from 'express';
-import * as argon2 from 'argon2';
+import {
+  Controller, Post, Get, Body, Res, Req,
+  UnauthorizedException
+} from '@nestjs/common';
+import { Response, Request } from 'express';
 import { PrismaService } from '../../prisma.service';
+import { JwtService } from '@nestjs/jwt';
+import { verifyPassword } from './password.util';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService, private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwt: JwtService,
+  ) {}
 
-  private cookieOptions() {
-    const isProd = process.env.NODE_ENV === 'production';
-    return {
-      httpOnly: true,
-      secure: isProd,               // на Render — true
-      sameSite: isProd ? ('none' as const) : ('lax' as const),
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 дней
-    };
-  }
-
-  @UseGuards(LocalAuthGuard)
-  @HttpCode(200)
   @Post('login')
-  async login(@Req() req: any, @Res({ passthrough: true }) res: Response) {
-    const token = await this.auth.sign({
-      id: req.user.id,
-      login: req.user.login,
-      role: req.user.role,
-    });
+  async login(@Body() body: any, @Res({ passthrough: true }) res: Response) {
+    const login = String(body?.login ?? '').trim();
+    const password = String(body?.password ?? '');
 
-    res.cookie('token', token, this.cookieOptions());
+    if (!login || !password) {
+      throw new UnauthorizedException('invalid_credentials');
+    }
 
-    return { ok: true, user: { id: req.user.id, login: req.user.login, role: req.user.role } };
-  }
+    try {
+      // Ищем по login/email/phone
+      const user = await this.prisma.user.findFirst({
+        where: { OR: [{ login }, { email: login }, { phone: login }] },
+      });
+      if (!user) throw new UnauthorizedException('invalid_credentials');
 
-  // Регистрация ученика
-  @Post('register-student')
-  @HttpCode(200)
-  async registerStudent(@Req() req: any, @Res({ passthrough: true }) res: Response) {
-    const body = req.body || {};
-    const login = (body.login ?? '').trim().toLowerCase();
-    const password = (body.password ?? '').trim();
-    const firstName = body.firstName ?? null;
-    const lastName = body.lastName ?? null;
+      // Подхватываем «дрейф» имен поля хеша
+      const hash: string | null =
+        (user as any).passwordHash ?? (user as any).password ?? (user as any).hash ?? null;
 
-    if (!login || !password) throw new BadRequestException('login and password required');
+      const ok = await verifyPassword(password, hash);
+      if (!ok) throw new UnauthorizedException('invalid_credentials');
 
-    const exists = await this.prisma.user.findUnique({ where: { login } });
-    if (exists) throw new BadRequestException('user exists');
+      const token = await this.jwt.signAsync(
+        { sub: user.id, role: (user as any).role },
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d', secret: process.env.JWT_SECRET }
+      );
 
-    const user = await this.prisma.user.create({
-      data: {
-        login,
-        firstName,
-        lastName,
-        role: 'student',
-        passwordHash: await argon2.hash(password),
-        studentProfile: { create: {} },
-      },
-    });
+      // cookie
+      res.cookie('token', token, {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      });
 
-    const token = await this.auth.sign({ id: user.id, login: user.login, role: user.role });
-    res.cookie('token', token, this.cookieOptions());
-
-    return { ok: true, user: { id: user.id, login: user.login, role: user.role } };
+      // «тонкий» ответ пользователем
+      return {
+        id: user.id,
+        login: (user as any).login,
+        role:  (user as any).role,
+        email: (user as any).email ?? null,
+        phone: (user as any).phone ?? null,
+        firstName: (user as any).firstName ?? null,
+        lastName:  (user as any).lastName ?? null,
+        balance:   (user as any).balance ?? 0,
+        createdAt: (user as any).createdAt,
+      };
+    } catch (e) {
+      // Вместо 500 — всегда 401 для неверных учёток/сравнения
+      throw new UnauthorizedException('invalid_credentials');
+    }
   }
 
   @Post('logout')
-  @HttpCode(200)
   async logout(@Res({ passthrough: true }) res: Response) {
-    const isProd = process.env.NODE_ENV === 'production';
-    // Чистим с теми же атрибутами, иначе браузер может не удалить
-    res.clearCookie('token', {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: isProd ? 'none' : 'lax',
-      path: '/',
-    });
+    res.clearCookie('token', { path: '/' });
     return { ok: true };
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('me')
-  async me(@Req() req: any) {
-    return this.auth.me(req.user.sub);
+  async me(@Req() req: Request) {
+    const token = (req as any)?.cookies?.token;
+    if (!token) throw new UnauthorizedException('unauthorized');
+
+    try {
+      const payload = await this.jwt.verifyAsync(token, { secret: process.env.JWT_SECRET });
+      const user = await this.prisma.user.findUnique({ where: { id: payload?.sub } });
+      if (!user) throw new UnauthorizedException('unauthorized');
+      return {
+        id: user.id,
+        login: (user as any).login,
+        role:  (user as any).role,
+        email: (user as any).email ?? null,
+        phone: (user as any).phone ?? null,
+        firstName: (user as any).firstName ?? null,
+        lastName:  (user as any).lastName ?? null,
+        balance:   (user as any).balance ?? 0,
+        createdAt: (user as any).createdAt,
+      };
+    } catch {
+      throw new UnauthorizedException('unauthorized');
+    }
   }
 }

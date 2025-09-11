@@ -4,22 +4,22 @@ export declare class ArticlesController {
     constructor(svc: ArticlesService);
     list(page?: string, limit?: string): Promise<{
         items: {
+            image: string | null;
             id: string;
             createdAt: Date;
             slug: string;
             title: string;
-            image: string | null;
         }[];
         total: number;
         page: number;
         limit: number;
     }>;
     bySlug(slug: string): Promise<{
+        image: string | null;
         id: string;
         createdAt: Date;
         slug: string;
         title: string;
         content: string;
-        image: string | null;
     }>;
 }

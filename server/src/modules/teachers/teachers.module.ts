@@ -1,13 +1,12 @@
 import { Module } from '@nestjs/common';
-import { TeachersService } from './teachers.service';
-import { TeachersController } from './teachers.controller';
 import { PrismaService } from '../../prisma.service';
+import { TeacherLessonsController } from './teacher-lessons.controller';
+import { TeacherMeController} from './teacher-me.controller';
 import { AdminTeachersController } from './admin-teachers.controller';
-import { CreateTeacherDto } from './dto/create-teacher.dto';
-import { UpdateTeacherDto } from './dto/update-teacher.dto';
+import { TeachersController } from './teachers.controller';
 
 @Module({
-  controllers: [TeachersController, AdminTeachersController],
-  providers: [TeachersService, PrismaService],
+  controllers: [TeacherLessonsController, TeacherMeController, AdminTeachersController, TeachersController],
+  providers: [PrismaService],
 })
 export class TeachersModule {}

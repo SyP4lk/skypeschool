@@ -1,14 +1,15 @@
 // client/app/admin/_lib/api.ts
+// Простая fetch-функция для АДМИНКИ: всегда префиксует путь /admin
 export async function api<T = any>(path: string, init: RequestInit = {}): Promise<T> {
-  const base = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/+$/, '');
+  const base = '';
+  const p = path.startsWith('/admin') ? path : `/admin${path.startsWith('/') ? path : `/${path}`}`;
 
-  const res = await fetch(`${base}${path}`, {
-    credentials: 'include', // отправляем cookie token
+  const res = await fetch(`${base}/api${p}`, {
+    credentials: 'include',
     cache: 'no-store',
     ...init,
     headers: {
       Accept: 'application/json',
-      // Если body строка (JSON) — ставим content-type.
       ...(typeof init.body === 'string' ? { 'Content-Type': 'application/json' } : {}),
       ...(init.headers || {}),
     },
@@ -16,15 +17,16 @@ export async function api<T = any>(path: string, init: RequestInit = {}): Promis
 
   if (res.status === 204) return null as T;
 
+  const ct = res.headers.get('content-type') || '';
+  const text = await res.text().catch(() => '');
+
   if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    try {
-      const j = JSON.parse(text);
-      throw new Error(j?.message || res.statusText);
-    } catch {
-      throw new Error(text || res.statusText);
+    if (ct.includes('application/json')) {
+      try { throw new Error(JSON.parse(text)?.message || res.statusText); } catch {}
     }
+    throw new Error(text || res.statusText);
   }
 
-  return res.json() as Promise<T>;
+  if (ct.includes('application/json')) return JSON.parse(text) as T;
+  return text as unknown as T;
 }

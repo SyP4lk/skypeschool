@@ -13,20 +13,22 @@ exports.JwtStrategy = void 0;
 const common_1 = require("@nestjs/common");
 const passport_1 = require("@nestjs/passport");
 const passport_jwt_1 = require("passport-jwt");
-const env_1 = require("../../config/env");
 function cookieExtractor(req) {
-    return (req && req.cookies && req.cookies['token']) || null;
+    return req?.cookies?.token ?? null;
 }
-let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(passport_jwt_1.Strategy) {
+let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(passport_jwt_1.Strategy, 'jwt') {
     constructor() {
         super({
-            jwtFromRequest: passport_jwt_1.ExtractJwt.fromExtractors([cookieExtractor, passport_jwt_1.ExtractJwt.fromAuthHeaderAsBearerToken()]),
+            jwtFromRequest: passport_jwt_1.ExtractJwt.fromExtractors([
+                cookieExtractor,
+                passport_jwt_1.ExtractJwt.fromAuthHeaderAsBearerToken(),
+            ]),
             ignoreExpiration: false,
-            secretOrKey: env_1.JWT_SECRET,
+            secretOrKey: process.env.JWT_SECRET,
         });
     }
     async validate(payload) {
-        return payload;
+        return { sub: payload.sub, login: payload.login, role: payload.role };
     }
 };
 exports.JwtStrategy = JwtStrategy;

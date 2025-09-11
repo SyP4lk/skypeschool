@@ -1,36 +1,33 @@
-import { AuthService } from './auth.service';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { PrismaService } from '../../prisma.service';
+import { JwtService } from '@nestjs/jwt';
 export declare class AuthController {
-    private readonly auth;
     private readonly prisma;
-    constructor(auth: AuthService, prisma: PrismaService);
-    private cookieOptions;
-    login(req: any, res: Response): Promise<{
-        ok: boolean;
-        user: {
-            id: any;
-            login: any;
-            role: any;
-        };
-    }>;
-    registerStudent(req: any, res: Response): Promise<{
-        ok: boolean;
-        user: {
-            id: string;
-            login: string;
-            role: import(".prisma/client").$Enums.Role;
-        };
+    private readonly jwt;
+    constructor(prisma: PrismaService, jwt: JwtService);
+    login(body: any, res: Response): Promise<{
+        id: string;
+        login: any;
+        role: any;
+        email: any;
+        phone: any;
+        firstName: any;
+        lastName: any;
+        balance: any;
+        createdAt: any;
     }>;
     logout(res: Response): Promise<{
         ok: boolean;
     }>;
-    me(req: any): Promise<{
+    me(req: Request): Promise<{
         id: string;
-        login: string;
-        role: import(".prisma/client").$Enums.Role;
-        tz: string;
-        balance: number;
-        createdAt: Date;
+        login: any;
+        role: any;
+        email: any;
+        phone: any;
+        firstName: any;
+        lastName: any;
+        balance: any;
+        createdAt: any;
     }>;
 }

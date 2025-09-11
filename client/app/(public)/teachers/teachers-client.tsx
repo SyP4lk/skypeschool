@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import TrialRequestModal from '../../components/TrialRequestModal';
 
-const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/+$/, '');
+const API = (process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/+$/, '');
 const ORIGIN = API.replace(/\/api$/, '');
 const toAbs = (p?: string | null) => !p ? null : p.startsWith('http') ? p : `${ORIGIN}${p.startsWith('/') ? '' : '/'}${p}`;
 

@@ -16,6 +16,8 @@ const students_controller_1 = require("./students.controller");
 const trials_controller_1 = require("./trials.controller");
 const support_controller_1 = require("./support.controller");
 const overview_controller_1 = require("./overview.controller");
+const admin_categories_controller_1 = require("./admin-categories.controller");
+const admin_teachers_controller_1 = require("../teachers/admin-teachers.controller");
 let AdminModule = class AdminModule {
 };
 exports.AdminModule = AdminModule;
@@ -28,6 +30,8 @@ exports.AdminModule = AdminModule = __decorate([
             trials_controller_1.AdminTrialsController,
             support_controller_1.AdminSupportController,
             overview_controller_1.AdminOverviewController,
+            admin_teachers_controller_1.AdminTeachersController,
+            admin_categories_controller_1.AdminCategoriesController
         ],
         providers: [prisma_service_1.PrismaService, roles_guard_1.RolesGuard],
     })

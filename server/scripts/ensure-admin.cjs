@@ -1,37 +1,30 @@
-// server/scripts/ensure-admin.cjs
+/* Создаёт/обновляет пользователя admin с ролью admin и паролем из .env (ADMIN_INITIAL_PASSWORD) */
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+
 const { PrismaClient } = require('@prisma/client');
 const argon2 = require('argon2');
 
 (async () => {
   const prisma = new PrismaClient();
-  const login = process.env.ADMIN_LOGIN || 'admin';
-  const password = process.env.ADMIN_INITIAL_PASSWORD || 'Admin12345!';
-
   try {
-    const existing = await prisma.user.findFirst({
-      where: { role: 'admin' },
-      select: { id: true, login: true }
+    const login = 'admin';
+    const pwd = process.env.ADMIN_INITIAL_PASSWORD || 'Admin12345!';
+    const passwordHash = await argon2.hash(pwd);
+
+    const user = await prisma.user.upsert({
+      where: { login },
+      create: { login, role: 'admin', passwordHash },
+      update: { role: 'admin', passwordHash },
+      select: { id: true, login: true, role: true },
     });
 
-    if (existing) {
-      console.log('[ensure-admin] admin exists:', existing.login || existing.id);
-      return;
-    }
-
-    const passwordHash = await argon2.hash(password);
-
-    const created = await prisma.user.create({
-      data: {
-        login,
-        passwordHash,
-        role: 'admin'
-      },
-      select: { id: true, login: true }
-    });
-
-    console.log('[ensure-admin] admin created:', created.login);
+    console.log('OK: admin user ready -> login=admin, password from .env ADMIN_INITIAL_PASSWORD');
+    console.log(user);
+    process.exit(0);
   } catch (e) {
-    console.error('[ensure-admin] failed:', e);
+    console.error('ensure-admin error:', e);
+    process.exit(1);
   } finally {
     await prisma.$disconnect();
   }

@@ -1,3 +1,4 @@
+// server/src/app.module.ts
 import { Module } from '@nestjs/common';
 import { AuthModule } from './modules/auth/auth.module';
 import { CategoriesModule } from './modules/categories/categories.module';
@@ -10,16 +11,30 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { TrialRequestsModule } from './modules/trial-requests/trial-requests.module';
 import { ArticlesModule } from './modules/articles/articles.module';
-
+import { FinanceModule } from './modules/finance/finance.module';
+import { SettingsModule } from './modules/settings/settings.module';
+import { WithdrawalsModule } from './modules/withdrawals/withdrawals.module';
 
 @Module({
   imports: [
-     ServeStaticModule.forRoot({
-      rootPath: join(process.cwd(), 'public', 'uploads'),
-      serveRoot: '/uploads',
-      exclude: ['/api*'],
+    // Static files (if used in project)
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'public'),
+      serveRoot: '/public',
     }),
-    AuthModule, CategoriesModule, SubjectsModule, TeachersModule, AdminModule, StudentsModule, LessonsModule, TrialRequestsModule, ArticlesModule
+
+    AuthModule,
+    CategoriesModule,
+    SubjectsModule,
+    TeachersModule,
+    AdminModule,
+    StudentsModule,
+    LessonsModule,
+    TrialRequestsModule,
+    ArticlesModule,
+    FinanceModule,
+    SettingsModule,
+    WithdrawalsModule,
   ],
 })
 export class AppModule {}

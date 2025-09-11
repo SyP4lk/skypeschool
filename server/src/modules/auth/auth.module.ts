@@ -1,24 +1,28 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { AuthService } from './auth.service';
-import { AuthController } from './auth.controller';
 import { PrismaService } from '../../prisma.service';
-import { LocalStrategy } from './local.strategy';
-import { JwtStrategy } from './jwt.strategy';
-import { JWT_SECRET, JWT_EXPIRES_IN } from '../../config/env';
+import { RegisterController } from './register.controller';
+
+// Keep existing controllers/services if they exist
+const extraControllers: any[] = [];
+try { const m = require('./auth.controller'); if (m?.AuthController) extraControllers.push(m.AuthController); } catch {}
+try { const m = require('./login.controller'); if (m?.LoginController) extraControllers.push(m.LoginController); } catch {}
+try { const m = require('./me.controller'); if (m?.MeController) extraControllers.push(m.MeController); } catch {}
+
+const extraProviders: any[] = [];
+try { const m = require('./auth.service'); if (m?.AuthService) extraProviders.push(m.AuthService); } catch {}
+try { const m = require('./jwt.strategy'); if (m?.JwtStrategy) extraProviders.push(m.JwtStrategy); } catch {}
+try { const m = require('./local.strategy'); if (m?.LocalStrategy) extraProviders.push(m.LocalStrategy); } catch {}
 
 @Module({
   imports: [
-    PassportModule,
     JwtModule.register({
-      global: true,
-      secret: JWT_SECRET,
-      signOptions: { expiresIn: JWT_EXPIRES_IN },
+      secret: process.env.JWT_SECRET || 'dev-secret',
+      signOptions: { expiresIn: '30d' },
     }),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, PrismaService, LocalStrategy, JwtStrategy],
-  exports: [AuthService],
+  controllers: [...extraControllers, RegisterController],
+  providers: [PrismaService, ...extraProviders],
+  exports: [JwtModule],
 })
 export class AuthModule {}

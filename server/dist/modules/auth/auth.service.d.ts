@@ -4,9 +4,14 @@ export declare class AuthService {
     private prisma;
     private jwt;
     constructor(prisma: PrismaService, jwt: JwtService);
-    validateUser(login: string, password: string): Promise<{
+    private tryFindByLogin;
+    private tryFindByEmail;
+    private tryFindByPhone;
+    validateUser(ident: string, password: string): Promise<{
         id: string;
         login: string;
+        email: string | null;
+        phone: string | null;
         passwordHash: string;
         role: import(".prisma/client").$Enums.Role;
         firstName: string | null;
@@ -16,17 +21,21 @@ export declare class AuthService {
         createdAt: Date;
         updatedAt: Date;
     }>;
-    sign(user: {
+    sign(payload: {
         id: string;
         login: string;
         role: string;
     }): Promise<string>;
     me(userId: string): Promise<{
-        id: string;
-        login: string;
-        role: import(".prisma/client").$Enums.Role;
-        tz: string;
-        balance: number;
-        createdAt: Date;
+        user: {
+            email: string | null;
+            phone: string | null;
+            id?: string | undefined;
+            login?: string | undefined;
+            role?: import(".prisma/client").$Enums.Role | undefined;
+            firstName?: string | null | undefined;
+            lastName?: string | null | undefined;
+            createdAt?: Date | undefined;
+        };
     }>;
 }

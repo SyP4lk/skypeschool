@@ -14,106 +14,102 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
-const auth_service_1 = require("./auth.service");
-const local_guard_1 = require("./local.guard");
-const jwt_guard_1 = require("./jwt.guard");
-const argon2 = require("argon2");
 const prisma_service_1 = require("../../prisma.service");
+const jwt_1 = require("@nestjs/jwt");
+const password_util_1 = require("./password.util");
 let AuthController = class AuthController {
-    auth;
     prisma;
-    constructor(auth, prisma) {
-        this.auth = auth;
+    jwt;
+    constructor(prisma, jwt) {
         this.prisma = prisma;
+        this.jwt = jwt;
     }
-    cookieOptions() {
-        const isProd = process.env.NODE_ENV === 'production';
-        return {
-            httpOnly: true,
-            secure: isProd,
-            sameSite: isProd ? 'none' : 'lax',
-            path: '/',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        };
-    }
-    async login(req, res) {
-        const token = await this.auth.sign({
-            id: req.user.id,
-            login: req.user.login,
-            role: req.user.role,
-        });
-        res.cookie('token', token, this.cookieOptions());
-        return { ok: true, user: { id: req.user.id, login: req.user.login, role: req.user.role } };
-    }
-    async registerStudent(req, res) {
-        const body = req.body || {};
-        const login = (body.login ?? '').trim().toLowerCase();
-        const password = (body.password ?? '').trim();
-        const firstName = body.firstName ?? null;
-        const lastName = body.lastName ?? null;
-        if (!login || !password)
-            throw new common_1.BadRequestException('login and password required');
-        const exists = await this.prisma.user.findUnique({ where: { login } });
-        if (exists)
-            throw new common_1.BadRequestException('user exists');
-        const user = await this.prisma.user.create({
-            data: {
-                login,
-                firstName,
-                lastName,
-                role: 'student',
-                passwordHash: await argon2.hash(password),
-                studentProfile: { create: {} },
-            },
-        });
-        const token = await this.auth.sign({ id: user.id, login: user.login, role: user.role });
-        res.cookie('token', token, this.cookieOptions());
-        return { ok: true, user: { id: user.id, login: user.login, role: user.role } };
+    async login(body, res) {
+        const login = String(body?.login ?? '').trim();
+        const password = String(body?.password ?? '');
+        if (!login || !password) {
+            throw new common_1.UnauthorizedException('invalid_credentials');
+        }
+        try {
+            const user = await this.prisma.user.findFirst({
+                where: { OR: [{ login }, { email: login }, { phone: login }] },
+            });
+            if (!user)
+                throw new common_1.UnauthorizedException('invalid_credentials');
+            const hash = user.passwordHash ?? user.password ?? user.hash ?? null;
+            const ok = await (0, password_util_1.verifyPassword)(password, hash);
+            if (!ok)
+                throw new common_1.UnauthorizedException('invalid_credentials');
+            const token = await this.jwt.signAsync({ sub: user.id, role: user.role }, { expiresIn: process.env.JWT_EXPIRES_IN || '7d', secret: process.env.JWT_SECRET });
+            res.cookie('token', token, {
+                httpOnly: true,
+                sameSite: 'lax',
+                path: '/',
+                maxAge: 1000 * 60 * 60 * 24 * 7,
+            });
+            return {
+                id: user.id,
+                login: user.login,
+                role: user.role,
+                email: user.email ?? null,
+                phone: user.phone ?? null,
+                firstName: user.firstName ?? null,
+                lastName: user.lastName ?? null,
+                balance: user.balance ?? 0,
+                createdAt: user.createdAt,
+            };
+        }
+        catch (e) {
+            throw new common_1.UnauthorizedException('invalid_credentials');
+        }
     }
     async logout(res) {
-        const isProd = process.env.NODE_ENV === 'production';
-        res.clearCookie('token', {
-            httpOnly: true,
-            secure: isProd,
-            sameSite: isProd ? 'none' : 'lax',
-            path: '/',
-        });
+        res.clearCookie('token', { path: '/' });
         return { ok: true };
     }
     async me(req) {
-        return this.auth.me(req.user.sub);
+        const token = req?.cookies?.token;
+        if (!token)
+            throw new common_1.UnauthorizedException('unauthorized');
+        try {
+            const payload = await this.jwt.verifyAsync(token, { secret: process.env.JWT_SECRET });
+            const user = await this.prisma.user.findUnique({ where: { id: payload?.sub } });
+            if (!user)
+                throw new common_1.UnauthorizedException('unauthorized');
+            return {
+                id: user.id,
+                login: user.login,
+                role: user.role,
+                email: user.email ?? null,
+                phone: user.phone ?? null,
+                firstName: user.firstName ?? null,
+                lastName: user.lastName ?? null,
+                balance: user.balance ?? 0,
+                createdAt: user.createdAt,
+            };
+        }
+        catch {
+            throw new common_1.UnauthorizedException('unauthorized');
+        }
     }
 };
 exports.AuthController = AuthController;
 __decorate([
-    (0, common_1.UseGuards)(local_guard_1.LocalAuthGuard),
-    (0, common_1.HttpCode)(200),
     (0, common_1.Post)('login'),
-    __param(0, (0, common_1.Req)()),
+    __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "login", null);
 __decorate([
-    (0, common_1.Post)('register-student'),
-    (0, common_1.HttpCode)(200),
-    __param(0, (0, common_1.Req)()),
-    __param(1, (0, common_1.Res)({ passthrough: true })),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
-    __metadata("design:returntype", Promise)
-], AuthController.prototype, "registerStudent", null);
-__decorate([
     (0, common_1.Post)('logout'),
-    (0, common_1.HttpCode)(200),
     __param(0, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "logout", null);
 __decorate([
-    (0, common_1.UseGuards)(jwt_guard_1.JwtAuthGuard),
     (0, common_1.Get)('me'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -122,6 +118,7 @@ __decorate([
 ], AuthController.prototype, "me", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
-    __metadata("design:paramtypes", [auth_service_1.AuthService, prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        jwt_1.JwtService])
 ], AuthController);
 //# sourceMappingURL=auth.controller.js.map

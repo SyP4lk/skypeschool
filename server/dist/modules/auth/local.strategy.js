@@ -10,18 +10,24 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LocalStrategy = void 0;
-const passport_local_1 = require("passport-local");
-const passport_1 = require("@nestjs/passport");
 const common_1 = require("@nestjs/common");
+const passport_1 = require("@nestjs/passport");
+const passport_local_1 = require("passport-local");
 const auth_service_1 = require("./auth.service");
-let LocalStrategy = class LocalStrategy extends (0, passport_1.PassportStrategy)(passport_local_1.Strategy) {
+let LocalStrategy = class LocalStrategy extends (0, passport_1.PassportStrategy)(passport_local_1.Strategy, 'local') {
     auth;
     constructor(auth) {
-        super({ usernameField: 'login', passwordField: 'password' });
+        super({
+            usernameField: 'login',
+            passwordField: 'password',
+            session: false,
+            passReqToCallback: false,
+        });
         this.auth = auth;
     }
     async validate(login, password) {
-        return this.auth.validateUser(login, password);
+        const user = await this.auth.validateUser(login, password);
+        return { id: user.id, login: user.login, role: user.role };
     }
 };
 exports.LocalStrategy = LocalStrategy;

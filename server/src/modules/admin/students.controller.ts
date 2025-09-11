@@ -61,7 +61,6 @@ const storage = multer.diskStorage({
 export class AdminStudentsController {
   constructor(private prisma: PrismaService) {}
 
-  // Карточка ученика: user + профиль
   @Roles('admin')
   @Get(':id')
   async getOne(@Param('id') id: string) {
@@ -97,34 +96,42 @@ export class AdminStudentsController {
       contactVk?: string | null;
       contactGoogle?: string | null;
       contactWhatsapp?: string | null;
+      contactWhatsApp?: string | null;
       contactMax?: string | null;
       contactDiscord?: string | null;
     },
   ) {
-    await this.prisma.user.update({
-      where: { id },
-      data: {
-        firstName: body.firstName ?? null,
-        lastName: body.lastName ?? null,
-      },
-    });
+    const has = (k: string) => Object.prototype.hasOwnProperty.call(body as any, k);
+
+    const userData: any = {};
+    if (has('firstName')) userData.firstName = body.firstName ?? null;
+    if (has('lastName'))  userData.lastName  = body.lastName  ?? null;
+    if (Object.keys(userData).length) {
+      await this.prisma.user.update({ where: { id }, data: userData });
+    }
+
+    const profileUpdate: any = {};
+    const setIfHas = (key: keyof typeof body) => {
+      if (has(key as string)) (profileUpdate as any)[key] = (body as any)[key] ?? null;
+    };
+    setIfHas('contactSkype');
+    setIfHas('contactVk');
+    setIfHas('contactGoogle');
+    setIfHas('contactMax');
+    setIfHas('contactDiscord');
+    if (has('contactWhatsapp') || has('contactWhatsApp')) {
+      (profileUpdate as any).contactWhatsapp = (body as any).contactWhatsapp ?? (body as any).contactWhatsApp ?? null;
+    }
 
     await this.prisma.studentProfile.upsert({
       where: { userId: id },
-      update: {
-        contactSkype: body.contactSkype ?? null,
-        contactVk: body.contactVk ?? null,
-        contactGoogle: body.contactGoogle ?? null,
-        contactWhatsapp: body.contactWhatsapp ?? null,
-        contactMax: body.contactMax ?? null,
-        contactDiscord: body.contactDiscord ?? null,
-      },
+      update: profileUpdate,
       create: {
         userId: id,
         contactSkype: body.contactSkype ?? null,
         contactVk: body.contactVk ?? null,
         contactGoogle: body.contactGoogle ?? null,
-        contactWhatsapp: body.contactWhatsapp ?? null,
+        contactWhatsapp: (body as any).contactWhatsapp ?? (body as any).contactWhatsApp ?? null,
         contactMax: body.contactMax ?? null,
         contactDiscord: body.contactDiscord ?? null,
       },

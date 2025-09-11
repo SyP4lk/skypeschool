@@ -28,9 +28,33 @@ enum LessonChannel {
   other
 }
 
+/**
+ * Типы финансовых операций для журнала.
+ * (Журнал остаётся в BalanceChange, просто добавили type/meta)
+ */
+enum TxType {
+  deposit           // + студенту (ручное пополнение админом)
+  lesson_charge     // - студенту (списание за проведённый урок)
+  lesson_income     // + преподавателю (доход за проведённый урок)
+  withdraw_request  // 0 (лог факта заявки)
+  withdraw_paid     // - преподавателю (выплата)
+  admin_adjustment  // +/- любому пользователю
+}
+
+/** Статус заявки на вывод средств */
+enum WithdrawStatus {
+  pending
+  approved
+  rejected
+}
+
 model User {
   id           String   @id @default(uuid())
   login        String   @unique
+  /* Новые поля под регистрацию/People */
+  email        String?  @unique
+  phone        String?  @unique
+
   passwordHash String
   role         Role
   firstName    String?
@@ -40,13 +64,22 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  /* Профили */
   teacherProfile   TeacherProfile?
   studentProfile   StudentProfile?
+
+  /* Связи уроков */
   lessonsAsTeacher Lesson[]        @relation("TeacherLessons")
   lessonsAsStudent Lesson[]        @relation("StudentLessons")
 
+  /* Финансы */
   balanceChanges BalanceChange[] @relation("UserBalanceChanges")
   changesMade    BalanceChange[] @relation("AdminBalanceChanges")
+
+  /* Заявки на вывод (для преподователя) */
+  withdrawals    Withdrawal[]
+
+  @@index([role])
 }
 
 model TeacherProfile {
@@ -59,6 +92,13 @@ model TeacherProfile {
   education       String?
   isActive        Boolean          @default(true)
   sortOrder       Int              @default(0)
+  contactVk        String?
+  contactTelegram  String?
+  contactWhatsapp  String?
+  contactZoom      String?
+  contactTeams     String?
+  contactDiscord   String?
+  contactMax       String?
   teacherSubjects TeacherSubject[]
 }
 
@@ -109,6 +149,9 @@ model TeacherSubject {
   subjectId String
   price     Int
   duration  Int
+
+  // При желании можно включить уникальность связки (аккуратно, если уже есть дубликаты):
+  // @@unique([teacherId, subjectId, duration])
 }
 
 model Article {
@@ -135,6 +178,13 @@ model Lesson {
   channelLink String?
   note        String?
 
+  /**
+   * Новое поле: цена в копейках.
+   * Фиксируется при создании/первом завершении урока, чтобы история не «плавала»
+   * при изменении тарифов у преподавателя.
+   */
+  price       Int?
+
   @@index([teacherId, startsAt])
   @@index([studentId, startsAt])
 }
@@ -143,15 +193,30 @@ model BalanceChange {
   id        String   @id @default(uuid())
   user      User     @relation("UserBalanceChanges", fields: [userId], references: [id])
   userId    String
+
+  /** Сумма со знаком (копейки) */
   delta     Int
+
+  /** Комментарий/причина (оставляем совместимость с фронтом) */
   reason    String?
+
+  /** Админ, который произвёл изменение (если применимо) */
   admin     User?    @relation("AdminBalanceChanges", fields: [adminId], references: [id])
   adminId   String?
+
+  /** Новый тип операции (см. TxType) */
+  type      TxType?
+
+  /** Любые дополнительные данные/линки (например, { lessonId, withdrawalId }) */
+  meta      Json?
+
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+  @@index([type])
 }
 
+/** Статусы для форм обратной связи/заявок на пробный */
 enum InboxStatus {
   new
   processed
@@ -181,4 +246,29 @@ model SupportMessage {
   createdAt DateTime    @default(now())
 
   @@index([status, createdAt])
+}
+
+/**
+ * Новая модель: заявки на вывод у преподавателей.
+ */
+model Withdrawal {
+  id         String         @id @default(uuid())
+  teacher    User           @relation(fields: [teacherId], references: [id])
+  teacherId  String
+  amount     Int
+  notes      String?
+  status     WithdrawStatus @default(pending)
+  createdAt  DateTime       @default(now())
+  resolvedAt DateTime?
+
+  @@index([status, createdAt])
+}
+
+/**
+ * Простые системные настройки (ключ-значение).
+ * Используем ключ 'topup_instructions' для текста «Как пополнить».
+ */
+model Setting {
+  key   String @id
+  value String
 }

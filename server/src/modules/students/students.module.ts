@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
-import { StudentsController } from './students.controller';
 import { PrismaService } from '../../prisma.service';
-import { RolesGuard } from '../common/roles.guard';
+import { StudentMeController } from './student-me.controller';
 
-@Module({ controllers:[StudentsController], providers:[PrismaService, RolesGuard] })
+@Module({
+  controllers: [StudentMeController],
+  providers: [PrismaService],
+})
 export class StudentsModule {}

@@ -14,13 +14,13 @@ export declare class AdminStudentsController {
         profile: {
             id: string;
             userId: string;
+            contactVk: string | null;
+            contactWhatsapp: string | null;
+            contactDiscord: string | null;
+            contactMax: string | null;
             avatar: string | null;
             contactSkype: string | null;
-            contactVk: string | null;
             contactGoogle: string | null;
-            contactWhatsapp: string | null;
-            contactMax: string | null;
-            contactDiscord: string | null;
         } | null;
     }>;
     updateProfile(id: string, body: {
@@ -30,6 +30,7 @@ export declare class AdminStudentsController {
         contactVk?: string | null;
         contactGoogle?: string | null;
         contactWhatsapp?: string | null;
+        contactWhatsApp?: string | null;
         contactMax?: string | null;
         contactDiscord?: string | null;
     }): Promise<{

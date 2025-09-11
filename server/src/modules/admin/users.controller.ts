@@ -1,7 +1,7 @@
 import {
   BadRequestException,
   Body, Controller, Delete, Get, Param, Patch, Post, Query,
-  UseGuards, NotFoundException, ForbiddenException
+  UseGuards, NotFoundException
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { JwtAuthGuard } from '../auth/jwt.guard';
@@ -16,113 +16,146 @@ export class AdminUsersController {
 
   @Roles('admin')
   @Get()
-  async list(
-    @Query('role') role: 'student' | 'teacher' | 'all' = 'all',
-    @Query('query') query = '', @Query('offset') offset = '0', @Query('limit') limit = '50',
-  ) {
-    const where: any = {
-      ...(role !== 'all' ? { role } : {}),
-      ...(query ? { OR: [
-        { login: { contains: query, mode: 'insensitive' } },
-        { firstName: { contains: query, mode: 'insensitive' } },
-        { lastName: { contains: query, mode: 'insensitive' } },
-      ] } : {}),
-    };
-    const [total, items] = await this.prisma.$transaction([
-      this.prisma.user.count({ where }),
-      this.prisma.user.findMany({
-        where, orderBy: { createdAt: 'desc' },
-        skip: Number(offset) || 0, take: Math.min(Number(limit) || 50, 200),
-        select: { id: true, login: true, firstName: true, lastName: true, role: true, balance: true },
-      }),
-    ]);
-    return { items, total };
-  }
+ @Roles('admin')
+@Get()
+async list(
+  @Query('q') q = '',
+  @Query('role') role?: string,
+  @Query('page') pageStr = '1',
+  @Query('limit') limitStr = '20'
+) {
+  const page = Math.max(parseInt(pageStr) || 1, 1);
+  const take = Math.min(Math.max(parseInt(limitStr) || 20, 1), 100);
+  const skip = (page - 1) * take;
 
-  // NEW: детальная карточка (общая для любой роли)
+  const where: any = {};
+  if (q) where.OR = [
+    { login: { contains: q } },
+    { email: { contains: q } },
+    { phone: { contains: q } },
+  ];
+  if (role) where.role = role;
+
+  // ⬇ не показываем soft-deleted (login содержит "__deleted__")
+  where.AND = [...(where.AND || []), { NOT: { login: { contains: '__deleted__' } } }];
+
+  const [items, total] = await Promise.all([
+    this.prisma.user.findMany({
+      where, skip, take, orderBy: { createdAt: 'desc' },
+      select: {
+        id: true, login: true, role: true,
+        firstName: true, lastName: true,
+        phone: true, email: true,
+        balance: true, createdAt: true,
+      } as any,
+    }),
+    this.prisma.user.count({ where }),
+  ]);
+  return { items, total, page, limit: take };
+}
+
   @Roles('admin')
   @Get(':id')
-  async getOne(@Param('id') id: string) {
-    const user = await this.prisma.user.findUnique({
+  async read(@Param('id') id: string) {
+    const u = await this.prisma.user.findUnique({
       where: { id },
-      select: { id: true, login: true, firstName: true, lastName: true, role: true, balance: true, tz: true },
+      select: {
+        id: true, login: true, role: true,
+        firstName: true, lastName: true,
+        createdAt: true, email: true, phone: true,
+      } as any,
     });
-    if (!user) throw new NotFoundException();
-    return { user };
+    if (!u) throw new NotFoundException('user_not_found');
+    return { user: u };
   }
 
-  // создание (как было)
   @Roles('admin')
   @Post()
-  async create(@Body() body: {
-    role: 'student'|'teacher'; login: string; password?: string; firstName?: string; lastName?: string; tz?: string;
-  }) {
-    const { role, login } = body;
-    if (!['student','teacher'].includes(role)) throw new BadRequestException('role must be student|teacher');
-    if (!login) throw new BadRequestException('login required');
-
-    const exists = await this.prisma.user.findUnique({ where: { login } });
-    if (exists) throw new BadRequestException('login already exists');
-
-    const password = body.password && body.password.length >= 8
-      ? body.password : Math.random().toString(36).slice(-10);
+  async create(@Body() body: any = {}) {
+    const { login, password, role, email, phone, firstName, lastName } = body || {};
+    if (!login || !password || !role) throw new BadRequestException('login_password_role_required');
     const passwordHash = await argon2.hash(password);
+    try {
+      return await this.prisma.user.create({
+        data: {
+          login, role, passwordHash,
+          email: email || null, phone: phone || null,
+          firstName: firstName || null, lastName: lastName || null,
+        } as any,
+      });
+    } catch (e: any) {
+      // Prisma P2002 → определить конфликтующее поле
+      if (e?.code === 'P2002') {
+        const t = e?.meta?.target; // может быть массивом или названием индекса
+        const s = Array.isArray(t) ? t.join(',') : String(t || '');
+        if (s.includes('login'))  throw new BadRequestException('login_taken');
+        if (s.includes('email'))  throw new BadRequestException('email_taken');
+        if (s.includes('phone'))  throw new BadRequestException('phone_taken');
+        throw new BadRequestException('unique_constraint_violation');
+      }
+      throw e;
+}
 
-    const user = await this.prisma.user.create({
-      data: { login, passwordHash, role, firstName: body.firstName || null, lastName: body.lastName || null, tz: body.tz || 'Europe/Moscow' },
-      select: { id: true, login: true, firstName: true, lastName: true, role: true, balance: true },
-    });
-
-    if (role === 'student') await this.prisma.studentProfile.create({ data: { userId: user.id } });
-    else await this.prisma.teacherProfile.create({ data: { userId: user.id, isActive: true } });
-
-    return { ok: true, user, newPassword: body.password ? undefined : password };
   }
 
-  // обновление ФИО
   @Roles('admin')
   @Patch(':id')
-  async updateNames(@Param('id') id: string, @Body() body: { firstName?: string|null; lastName?: string|null }) {
-    const user = await this.prisma.user.update({
-      where: { id }, data: { firstName: body.firstName ?? null, lastName: body.lastName ?? null },
-      select: { id: true, login: true, firstName: true, lastName: true, role: true, balance: true },
-    });
-    return { user };
+  async update(@Param('id') id: string, @Body() body: any = {}) {
+    if (!body || typeof body !== 'object') throw new BadRequestException('empty_body');
+    const data: any = {};
+    if ('firstName' in body) data.firstName = body.firstName ?? null;
+    if ('lastName'  in body) data.lastName  = body.lastName  ?? null;
+    if ('email'     in body) { const e = (body.email ?? '').trim(); data.email = e || null; }
+    if ('phone'     in body) { const p = (body.phone ?? '').trim(); data.phone = p || null; }
+
+    try {
+      return await this.prisma.user.update({
+        where: { id },
+        data,
+        select: {
+          id: true, login: true, role: true,
+          firstName: true, lastName: true,
+          email: true, phone: true,
+          createdAt: true,
+        } as any,
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2002') throw new BadRequestException('unique_constraint_violation');
+      throw e;
+    }
   }
 
-  // NEW: смена пароля (для teacher; ученики меняются через /admin/students/:id/password)
   @Roles('admin')
   @Post(':id/password')
-  async setPassword(@Param('id') id: string, @Body() body: { newPassword?: string }) {
-    const user = await this.prisma.user.findUnique({ where: { id }, select: { role: true } });
-    if (!user) throw new NotFoundException();
-    if (user.role === 'admin') throw new ForbiddenException('cannot change admin password here');
-
-    const password = (body.newPassword || '').trim();
-    if (!password || password.length < 8) throw new BadRequestException('Пароль минимум 8 символов');
-
-    const passwordHash = await argon2.hash(password);
-    await this.prisma.user.update({ where: { id }, data: { passwordHash } });
-    return { ok: true };
+  async changePassword(@Param('id') id: string, @Body() body: any = {}) {
+    const pwdRaw = body?.newPassword ?? body?.password ?? '';
+    const pwd = String(pwdRaw || '');
+    if (pwd.length < 8) throw new BadRequestException('password_too_short');
+    const passwordHash = await argon2.hash(pwd);
+    return this.prisma.user.update({ where: { id }, data: { passwordHash } });
   }
 
-  // баланс
-  @Roles('admin') @Get(':id/balance')
+  @Roles('admin')
+  @Get(':id/balance')
   async balance(@Param('id') id: string) {
-    const row = await this.prisma.user.findUnique({ where: { id }, select: { balance: true } });
-    if (!row) throw new NotFoundException();
-    return { balance: row.balance };
+    try {
+      const u = await (this.prisma as any).user.findUnique({
+        where: { id }, select: { balance: true } as any,
+      });
+      return { balance: Number((u as any)?.balance ?? 0), currency: 'RUB' };
+    } catch { return { balance: 0, currency: 'RUB' }; }
   }
 
-  // удаление
-  @Roles('admin') @Delete(':id')
+  @Roles('admin')
+  @Delete(':id')
   async remove(@Param('id') id: string) {
-    const row = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true } });
-    if (!row) throw new NotFoundException();
-    if (row.role === 'admin') throw new ForbiddenException('cannot delete admin');
-    await this.prisma.studentProfile.deleteMany({ where: { userId: id } });
-    await this.prisma.teacherProfile.deleteMany({ where: { userId: id } });
-    await this.prisma.user.delete({ where: { id } });
+    const u = await this.prisma.user.findUnique({ where: { id }, select: { login: true } as any });
+    if (!u) throw new NotFoundException('user_not_found');
+    const stamp = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    await this.prisma.user.update({
+      where: { id },
+      data: { login: `${(u as any).login}__deleted__${stamp}`.slice(0,150) } as any,
+    });
     return { ok: true };
   }
 }

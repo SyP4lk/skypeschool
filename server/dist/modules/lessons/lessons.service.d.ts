@@ -25,11 +25,11 @@ export declare class LessonsService {
         channel: $Enums.LessonChannel;
     }>;
     listForTeacher(teacherUserId: string, range?: Range): Promise<{
-        id: string;
         subject: {
             name: string;
             id: string;
         };
+        id: string;
         duration: number;
         studentId: string;
         startsAt: Date;
@@ -37,11 +37,11 @@ export declare class LessonsService {
         channel: $Enums.LessonChannel;
     }[]>;
     listForStudent(studentUserId: string, range?: Range): Promise<{
-        id: string;
         subject: {
             name: string;
             id: string;
         };
+        id: string;
         teacherId: string;
         duration: number;
         startsAt: Date;

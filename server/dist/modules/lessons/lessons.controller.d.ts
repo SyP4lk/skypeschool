@@ -3,6 +3,10 @@ export declare class LessonsController {
     private prisma;
     constructor(prisma: PrismaService);
     list(req: any, _p: any, _b: any, studentId?: string, teacherId?: string): Promise<({
+        subject: {
+            name: string;
+            id: string;
+        };
         teacher: {
             id: string;
             login: string;
@@ -15,14 +19,11 @@ export declare class LessonsController {
             firstName: string | null;
             lastName: string | null;
         };
-        subject: {
-            name: string;
-            id: string;
-        };
     } & {
         id: string;
         teacherId: string;
         subjectId: string;
+        price: number | null;
         duration: number;
         studentId: string;
         startsAt: Date;
@@ -43,6 +44,7 @@ export declare class LessonsController {
         id: string;
         teacherId: string;
         subjectId: string;
+        price: number | null;
         duration: number;
         studentId: string;
         startsAt: Date;
@@ -55,6 +57,7 @@ export declare class LessonsController {
         id: string;
         teacherId: string;
         subjectId: string;
+        price: number | null;
         duration: number;
         studentId: string;
         startsAt: Date;

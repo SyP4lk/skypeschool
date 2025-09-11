@@ -4,19 +4,12 @@ declare const LocalStrategy_base: new (...args: [] | [options: import("passport-
     validate(...args: any[]): unknown;
 };
 export declare class LocalStrategy extends LocalStrategy_base {
-    private auth;
+    private readonly auth;
     constructor(auth: AuthService);
     validate(login: string, password: string): Promise<{
         id: string;
         login: string;
-        passwordHash: string;
         role: import(".prisma/client").$Enums.Role;
-        firstName: string | null;
-        lastName: string | null;
-        tz: string;
-        balance: number;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
 }
 export {};

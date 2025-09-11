@@ -141,8 +141,8 @@ export default function HomePage() {
           </form>
 
           <p className={styles.heroSubtext} data-aos="fade-up" data-aos-delay="200" data-aos-offset="0">
-            Проверенные преподаватели — честные отзывы и пробный урок <br />
-            Поможем «закрыть» пробелы и полюбить предмет
+            Индивидуальные занятия с проверенными преподавателями <br />
+            Подберём преподавателя под вашу цель
           </p>
         </div>
       </section>
