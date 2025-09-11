@@ -7,8 +7,12 @@ import { ALLOWED_ORIGINS } from './config/env';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Работа за прокси (Render/Cloudflare)
-  app.set('trust proxy', 1);
+  // Устанавливаем trust proxy через нативный Express-инстанс (типобезопасно для Nest)
+  const adapter = app.getHttpAdapter() as any;
+  const instance: any = adapter?.getInstance ? adapter.getInstance() : adapter;
+  if (instance?.set) {
+    instance.set('trust proxy', 1);
+  }
 
   // CORS для кросс-доменных кук
   app.enableCors({
@@ -20,7 +24,7 @@ async function bootstrap() {
     optionsSuccessStatus: 204,
   });
 
-  // Парсеры тела и cookie
+  // Парсеры тела и cookie (urlencoded нужен для форм без preflight)
   app.use(cookieParser());
   app.use(express.json({ limit: '2mb' }));
   app.use(express.urlencoded({ extended: true, limit: '5mb' }));
