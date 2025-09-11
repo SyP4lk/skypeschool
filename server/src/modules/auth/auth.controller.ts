@@ -43,85 +43,48 @@ export class AuthController {
   private cookieBase(): CookieOptions {
     const isProd = process.env.NODE_ENV === 'production';
     const sameSite: CookieOptions['sameSite'] = isProd ? 'none' : 'lax';
-    return {
-      httpOnly: true,
-      secure: isProd,
-      sameSite,
-      path: '/',
-    };
+    return { httpOnly: true, secure: isProd, sameSite, path: '/' };
   }
-
   private cookieOpts(): CookieOptions {
-    const maxAge = parseDurationMs(
-      process.env.JWT_EXPIRES_IN || '7d',
-      7 * 24 * 60 * 60 * 1000,
-    );
+    const maxAge = parseDurationMs(process.env.JWT_EXPIRES_IN || '7d', 7 * 24 * 60 * 60 * 1000);
     return { ...this.cookieBase(), maxAge };
   }
 
-  private clearCookie(res: Response) {
-    // Важно передать те же path/sameSite/secure, чтобы точно стёрлась
-    res.clearCookie('token', this.cookieBase());
-  }
-
   @Post('login')
-  async login(
-    @Body() body: any,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    // Принимаем JSON и x-www-form-urlencoded
-    const ident = String(
-      (body?.loginOrEmail ?? body?.login ?? body?.email ?? '').toString(),
-    ).trim();
-    const password = String((body?.password ?? body?.pwd ?? '')).toString();
+  async login(@Body() body: any, @Res({ passthrough: true }) res: Response) {
+    // Принимаем JSON и x-www-form-urlencoded; нормализуем поля
+    const ident = String((body?.loginOrEmail ?? body?.login ?? body?.email ?? '')).trim();
+    const password = String((body?.password ?? body?.pwd ?? '')).trim();
+    if (!ident || !password) throw new UnauthorizedException('invalid_credentials');
 
-    if (!ident || !password) {
-      throw new UnauthorizedException('invalid_credentials');
-    }
-
-    // Ищем по login/email/phone; если колонок нет — откатываемся к login
+    // Ищем по login/email/phone; если колонок нет — фолбэк к login
     let user: any = null;
     try {
       user = await this.prisma.user.findFirst({
         where: { OR: [{ login: ident }, { email: ident }, { phone: ident }] } as any,
-        select: {
-          id: true, login: true, role: true,
-          passwordHash: true, password: true, hash: true,
-        } as any,
+        select: { id: true, login: true, role: true, passwordHash: true, password: true, hash: true } as any,
       });
     } catch (e: any) {
       const msg = String(e?.message || '');
-      const code = e?.code;
-      if (code === 'P2022' || /column.*User\.(email|phone)/i.test(msg)) {
+      if (e?.code === 'P2022' || /column.*User\.(email|phone)/i.test(msg)) {
         user = await this.prisma.user.findFirst({
           where: { login: ident } as any,
-          select: {
-            id: true, login: true, role: true,
-            passwordHash: true, password: true, hash: true,
-          } as any,
+          select: { id: true, login: true, role: true, passwordHash: true, password: true, hash: true } as any,
         });
       } else {
-        // не раскрываем детали наружу
         this.log.error(`Login prisma error: ${msg}`);
         throw new UnauthorizedException('invalid_credentials');
       }
     }
-
     if (!user) throw new UnauthorizedException('invalid_credentials');
 
     const hash: unknown = user.passwordHash ?? user.password ?? user.hash ?? null;
-    if (typeof hash !== 'string' || !hash) {
-      throw new UnauthorizedException('invalid_credentials');
-    }
+    if (typeof hash !== 'string' || !hash) throw new UnauthorizedException('invalid_credentials');
 
-    // verify может бросить, если хэш не argon2/битый — считаем как неверный пароль
+    // Только argon2 (по ТЗ). Любые другие/битые хэши => неверный пароль.
     let ok = false;
     try {
-      if (/^\$argon2(id|i|d)\$/.test(hash)) {
-        ok = await argon2.verify(hash, password);
-      } else {
-        ok = false;
-      }
+      ok = /^\$argon2(id|i|d)\$/.test(hash) ? await argon2.verify(hash, password) : false;
     } catch (e: any) {
       this.log.warn(`argon2.verify failed: ${e?.message || e}`);
       ok = false;
@@ -130,20 +93,11 @@ export class AuthController {
 
     const token = await this.jwt.signAsync(
       { sub: user.id, role: user.role, login: user.login },
-      {
-        secret: process.env.JWT_SECRET || 'dev',
-        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-      },
+      { secret: process.env.JWT_SECRET || 'dev', expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
     );
 
     res.cookie('token', token, this.cookieOpts());
     return { ok: true, id: user.id, role: user.role, login: user.login };
-  }
-
-  @Post('logout')
-  async logout(@Res({ passthrough: true }) res: Response) {
-    this.clearCookie(res);
-    return { ok: true };
   }
 
   @Get('me')
@@ -152,14 +106,12 @@ export class AuthController {
       const token =
         (req as any).cookies?.token ||
         (req.headers?.authorization || '').replace(/^Bearer\s+/i, '');
-
       if (!token) throw new UnauthorizedException('unauthorized');
 
       const payload = await this.jwt.verifyAsync(token, {
         secret: process.env.JWT_SECRET || 'dev',
       });
 
-      // Базовые поля — всегда
       let user: any = await this.prisma.user.findUnique({
         where: { id: payload?.sub },
         select: {
@@ -170,7 +122,6 @@ export class AuthController {
       });
       if (!user) throw new UnauthorizedException('unauthorized');
 
-      // Опционально дотягиваем email/phone — если колонок нет, игнорируем
       try {
         const ext = await this.prisma.user.findUnique({
           where: { id: payload?.sub },
@@ -180,9 +131,7 @@ export class AuthController {
           user.email = ext.email ?? user.email;
           user.phone = ext.phone ?? user.phone;
         }
-      } catch {
-        // ignore (старые БД без колонок)
-      }
+      } catch {}
 
       return user;
     } catch {

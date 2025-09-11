@@ -1,30 +1,35 @@
-/* Создаёт/обновляет пользователя admin с ролью admin и паролем из .env (ADMIN_INITIAL_PASSWORD) */
-const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
-
+/* eslint-disable */
 const { PrismaClient } = require('@prisma/client');
 const argon2 = require('argon2');
 
-(async () => {
+(async function run() {
   const prisma = new PrismaClient();
   try {
-    const login = 'admin';
-    const pwd = process.env.ADMIN_INITIAL_PASSWORD || 'Admin12345!';
-    const passwordHash = await argon2.hash(pwd);
+    const login = process.env.ADMIN_LOGIN || 'admin';
+    const pass = process.env.ADMIN_INITIAL_PASSWORD || 'Admin12345!';
+
+    const hash = await argon2.hash(pass, { type: argon2.argon2id });
 
     const user = await prisma.user.upsert({
       where: { login },
-      create: { login, role: 'admin', passwordHash },
-      update: { role: 'admin', passwordHash },
-      select: { id: true, login: true, role: true },
+      update: {
+        role: 'admin',
+        passwordHash: hash,
+      },
+      create: {
+        login,
+        role: 'admin',
+        passwordHash: hash,
+        firstName: 'Admin',
+        lastName: '',
+        balance: 0,
+      },
     });
 
-    console.log('OK: admin user ready -> login=admin, password from .env ADMIN_INITIAL_PASSWORD');
-    console.log(user);
-    process.exit(0);
+    console.log(`OK: admin user ready -> login=${user.login} (argon2id)`);
   } catch (e) {
-    console.error('ensure-admin error:', e);
-    process.exit(1);
+    console.error('ensure-admin failed:', e);
+    process.exitCode = 1;
   } finally {
     await prisma.$disconnect();
   }
