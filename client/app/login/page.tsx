@@ -3,7 +3,36 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
-const API = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+const API = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, ''); // https://skypeschool-server.onrender.com/api
+
+// простая задержка
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+// прогрев бэка без preflight (GET, без credentials/заголовков)
+async function warmUp() {
+  try {
+    const url = `${API}/public/teachers?limit=1`;
+    await fetch(url, { cache: 'no-store', keepalive: true, mode: 'cors' });
+  } catch {
+    // игнор: цель — разбудить инстанс
+  }
+}
+
+// запрос с автоповтором при сетевой ошибке/503
+async function fetchWithRetry(input: RequestInfo | URL, init: RequestInit, retries = 3) {
+  let lastErr: any;
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(input, init);
+      if (res.status !== 503) return res;
+      lastErr = new Error('503 Service Unavailable');
+    } catch (e) {
+      lastErr = e;
+    }
+    await sleep(800 * (i + 1)); // 0.8s, 1.6s, 2.4s
+  }
+  throw lastErr;
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,10 +47,13 @@ export default function LoginPage() {
     setOk(false);
 
     try {
-      // КЛЮЧЕВОЕ: отправляем оба поля
-      const payload = { loginOrEmail: login, login, password };
+      // 1) прогреть бэк (избежать 503 на preflight)
+      await warmUp();
+      await sleep(300); // дать инстансу проснуться
 
-      const res = await fetch(`${API}/auth/login`, {
+      // 2) логин с повтором
+      const payload = { loginOrEmail: login, login, password };
+      const res = await fetchWithRetry(`${API}/auth/login`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },
@@ -30,12 +62,12 @@ export default function LoginPage() {
 
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(text || 'Ошибка входа');
+        throw new Error(text || `Ошибка входа (${res.status})`);
       }
 
       setOk(true);
 
-      // Определим роль и унесём в нужный ЛК
+      // подтянем роль (если доступно) и унесем в нужный раздел
       let role: string | undefined;
       try {
         const me = await fetch(`${API}/auth/me`, { credentials: 'include', cache: 'no-store' });
@@ -45,12 +77,11 @@ export default function LoginPage() {
         }
       } catch {}
 
-      const target =
+      router.replace(
         role === 'admin' ? '/admin' :
         role === 'teacher' ? '/lk/teacher' :
-        role === 'student' ? '/lk/student' : '/';
-
-      router.replace(target);
+        role === 'student' ? '/lk/student' : '/'
+      );
     } catch (e: any) {
       setError(e?.message || 'Не удалось выполнить вход');
     }
