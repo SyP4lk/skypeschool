@@ -26,70 +26,60 @@ export class AuthController {
     const isProd = process.env.NODE_ENV === 'production';
     return {
       httpOnly: true,
-      secure: isProd,                  // для cross-site обязательно true
+      secure: isProd,
       sameSite: isProd ? ('none' as const) : ('lax' as const),
       path: '/',
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 дней
+      maxAge: 1000 * 60 * 60 * 24 * 7,
     };
   }
 
   @Post('login')
   async login(@Body() body: any, @Res({ passthrough: true }) res: Response) {
     try {
-      // Поддерживаем и JSON, и x-www-form-urlencoded, и разные имена полей
       const ident = String(
-        body?.loginOrEmail ?? body?.login ?? body?.email ?? '',
+        body?.loginOrEmail ?? body?.login ?? body?.email ?? ''
       ).trim();
       const password = String(body?.password ?? body?.pass ?? '').trim();
 
-      if (!ident || !password) {
-        throw new UnauthorizedException('invalid_credentials');
+      if (!ident || !password) throw new UnauthorizedException('invalid_credentials');
+
+      // Пытаемся искать по login|email, а если в БД нет колонки email — откатываемся на login
+      let user: any = null;
+      try {
+        user = await this.prisma.user.findFirst({
+          where: { OR: [{ login: ident }, { email: ident }] },
+        });
+      } catch (e: any) {
+        const code = e?.code;
+        const msg = e?.message || '';
+        if (code === 'P2022' || /User\.email/.test(msg)) {
+          // колонки email нет в БД — ищем только по login
+          user = await this.prisma.user.findFirst({ where: { login: ident } });
+        } else {
+          throw e;
+        }
       }
 
-      // Ищем по login/email (без телефона — чтобы избежать ошибок схемы)
-      const user = await this.prisma.user.findFirst({
-        where: { OR: [{ login: ident }, { email: ident }] },
-      });
-      if (!user) {
-        throw new UnauthorizedException('invalid_credentials');
-      }
+      if (!user) throw new UnauthorizedException('invalid_credentials');
 
-      // Хеш пароля (поддерживаем разные исторические имена)
       const hash: string | null =
-        (user as any).passwordHash ??
-        (user as any).password ??
-        (user as any).hash ??
-        null;
+        user.passwordHash ?? user.password ?? user.hash ?? null;
+      if (!hash) throw new UnauthorizedException('invalid_credentials');
 
-      if (!hash) {
-        throw new UnauthorizedException('invalid_credentials');
-      }
-
-      // Проверяем argon2 (у нас сид админа точно делает argon2)
       const ok = await argon2.verify(hash, password);
-      if (!ok) {
-        throw new UnauthorizedException('invalid_credentials');
-      }
+      if (!ok) throw new UnauthorizedException('invalid_credentials');
 
-      const payload = {
-        sub: user.id,
-        id: user.id,
-        role: (user as any).role,
-        login: (user as any).login,
-      };
-
-      const token = await this.jwt.signAsync(payload, {
-        secret: process.env.JWT_SECRET || 'dev',
-        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-      });
+      const token = await this.jwt.signAsync(
+        { sub: user.id, role: user.role, login: user.login },
+        { secret: process.env.JWT_SECRET || 'dev', expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
+      );
 
       res.cookie('token', token, this.cookieOpts());
-      return { ok: true, id: user.id, role: (user as any).role, login: (user as any).login };
+      return { ok: true, id: user.id, role: user.role, login: user.login };
     } catch (e: any) {
-      // Чтобы не светить 500 на проде из-за несущественных различий формата,
-      // логируем и отдаём uniform 401
       if (e instanceof UnauthorizedException) throw e;
       this.log.error('Login error', e?.stack || e?.message || String(e));
+      // Для клиента отдаём единый ответ, без 500
       throw new UnauthorizedException('invalid_credentials');
     }
   }
@@ -98,11 +88,10 @@ export class AuthController {
   async logout(@Res({ passthrough: true }) res: Response) {
     res.clearCookie('token', { path: '/' });
     return { ok: true };
-    }
+  }
 
   @Get('me')
   async me(@Req() req: Request) {
-    // Если у тебя уже есть JwtGuard — можно оставить свой / удалить этот метод.
     const anyReq = req as any;
     const token = anyReq?.cookies?.token;
     if (!token) throw new UnauthorizedException('unauthorized');
@@ -114,15 +103,9 @@ export class AuthController {
       const user = await this.prisma.user.findUnique({
         where: { id: payload?.sub },
         select: {
-          id: true,
-          login: true,
-          role: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          phone: true,
-          balance: true,
-          createdAt: true,
+          id: true, login: true, role: true,
+          firstName: true, lastName: true,
+          email: true, phone: true, balance: true, createdAt: true,
         },
       });
       if (!user) throw new UnauthorizedException('unauthorized');
