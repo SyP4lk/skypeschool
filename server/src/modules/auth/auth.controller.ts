@@ -5,7 +5,6 @@ import {
 import { Response, Request } from 'express';
 import { PrismaService } from '../../prisma.service';
 import { JwtService } from '@nestjs/jwt';
-import { verifyPassword } from './password.util';
 
 @Controller('auth')
 export class AuthController {
@@ -14,58 +13,77 @@ export class AuthController {
     private readonly jwt: JwtService,
   ) {}
 
+  private cookieOpts() {
+    const isProd = process.env.NODE_ENV === 'production';
+    return {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? ('none' as const) : ('lax' as const),
+      path: '/',
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 дней
+    };
+  }
+
   @Post('login')
   async login(@Body() body: any, @Res({ passthrough: true }) res: Response) {
-    const login = String(body?.login ?? '').trim();
-    const password = String(body?.password ?? '');
+    // Поддерживаем и JSON, и x-www-form-urlencoded
+    const ident = String(
+      body?.loginOrEmail ?? body?.login ?? body?.email ?? body?.username ?? ''
+    ).trim();
+    const password = String(body?.password ?? body?.pass ?? '').trim();
 
-    if (!login || !password) {
+    if (!ident || !password) {
       throw new UnauthorizedException('invalid_credentials');
     }
 
-    try {
-      // Ищем по login/email/phone
-      const user = await this.prisma.user.findFirst({
-        where: { OR: [{ login }, { email: login }, { phone: login }] },
-      });
-      if (!user) throw new UnauthorizedException('invalid_credentials');
+    // Ищем по login/email/phone (телефон оставляем как прислали — нормализация в сервисах не обязательна)
+    const user = await this.prisma.user.findFirst({
+      where: { OR: [{ login: ident }, { email: ident }, { phone: ident }] },
+    });
+    if (!user) throw new UnauthorizedException('invalid_credentials');
 
-      // Подхватываем «дрейф» имен поля хеша
-      const hash: string | null =
-        (user as any).passwordHash ?? (user as any).password ?? (user as any).hash ?? null;
+    // Достаём хеш с учётом возможных старых имён поля
+    const hash: string | null =
+      (user as any).passwordHash ?? (user as any).password ?? (user as any).hash ?? null;
+    if (!hash) throw new UnauthorizedException('invalid_credentials');
 
-      const ok = await verifyPassword(password, hash);
-      if (!ok) throw new UnauthorizedException('invalid_credentials');
+    // Универсальная проверка: argon2 → bcrypt/bcryptjs → fallback (если вдруг хранится в явном виде)
+    const ok = await (async () => {
+      try {
+        if (hash.startsWith('$argon2')) {
+          const argon2 = require('argon2');
+          return await argon2.verify(hash, password);
+        }
+        if (hash.startsWith('$2a$') || hash.startsWith('$2b$') || hash.startsWith('$2y$')) {
+          try {
+            const b = require('bcrypt');
+            return await b.compare(password, hash);
+          } catch {
+            const bjs = require('bcryptjs');
+            return await bjs.compare(password, hash);
+          }
+        }
+        return password === hash;
+      } catch {
+        return false;
+      }
+    })();
 
-      const token = await this.jwt.signAsync(
-        { sub: user.id, role: (user as any).role },
-        { expiresIn: process.env.JWT_EXPIRES_IN || '7d', secret: process.env.JWT_SECRET }
-      );
+    if (!ok) throw new UnauthorizedException('invalid_credentials');
 
-      // cookie
-      res.cookie('token', token, {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-      });
+    const token = await this.jwt.signAsync(
+      { sub: user.id, role: (user as any).role, login: (user as any).login },
+      { secret: process.env.JWT_SECRET || 'dev', expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
+    );
 
-      // «тонкий» ответ пользователем
-      return {
-        id: user.id,
-        login: (user as any).login,
-        role:  (user as any).role,
-        email: (user as any).email ?? null,
-        phone: (user as any).phone ?? null,
-        firstName: (user as any).firstName ?? null,
-        lastName:  (user as any).lastName ?? null,
-        balance:   (user as any).balance ?? 0,
-        createdAt: (user as any).createdAt,
-      };
-    } catch (e) {
-      // Вместо 500 — всегда 401 для неверных учёток/сравнения
-      throw new UnauthorizedException('invalid_credentials');
-    }
+    res.cookie('token', token, this.cookieOpts());
+
+    return {
+      ok: true,
+      id: user.id,
+      role: (user as any).role,
+      login: (user as any).login,
+    };
   }
 
   @Post('logout')
@@ -76,22 +94,26 @@ export class AuthController {
 
   @Get('me')
   async me(@Req() req: Request) {
-    const token = (req as any)?.cookies?.token;
+    const anyReq = req as any;
+    const token = anyReq?.cookies?.token;
     if (!token) throw new UnauthorizedException('unauthorized');
 
     try {
-      const payload = await this.jwt.verifyAsync(token, { secret: process.env.JWT_SECRET });
+      const payload = await this.jwt.verifyAsync(token, {
+        secret: process.env.JWT_SECRET || 'dev',
+      });
       const user = await this.prisma.user.findUnique({ where: { id: payload?.sub } });
       if (!user) throw new UnauthorizedException('unauthorized');
+
       return {
         id: user.id,
         login: (user as any).login,
-        role:  (user as any).role,
+        role: (user as any).role,
         email: (user as any).email ?? null,
         phone: (user as any).phone ?? null,
         firstName: (user as any).firstName ?? null,
-        lastName:  (user as any).lastName ?? null,
-        balance:   (user as any).balance ?? 0,
+        lastName: (user as any).lastName ?? null,
+        balance: (user as any).balance ?? 0,
         createdAt: (user as any).createdAt,
       };
     } catch {

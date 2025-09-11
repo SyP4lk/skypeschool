@@ -4,16 +4,15 @@ import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
 const API = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, ''); // https://skypeschool-server.onrender.com/api
-const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// Прогрев бэка: лёгкий GET без credentials/заголовков (не вызывает preflight)
+// Прогрев: GET на существующий публичный роут (без preflight)
 async function warmUp() {
   try {
-    await fetch(`${API}/public/teachers?limit=1`, { cache: 'no-store', keepalive: true, mode: 'cors' });
+    await fetch(`${API}/teachers?limit=1`, { cache: 'no-store', keepalive: true, mode: 'cors' });
   } catch {}
 }
 
-// POST с автоповтором (если Render ещё просыпается)
 async function fetchWithRetry(input: RequestInfo | URL, init: RequestInit, retries = 3) {
   let last: any;
   for (let i = 0; i < retries; i++) {
@@ -24,7 +23,7 @@ async function fetchWithRetry(input: RequestInfo | URL, init: RequestInit, retri
     } catch (e) {
       last = e;
     }
-    await sleep(800 * (i + 1)); // 0.8s, 1.6s, 2.4s
+    await sleep(800 * (i + 1));
   }
   throw last;
 }
@@ -42,11 +41,10 @@ export default function LoginPage() {
     setOk(false);
 
     try {
-      // 1) прогреть
       await warmUp();
       await sleep(300);
 
-      // 2) важное: urlencoded без явного Content-Type -> НЕ будет preflight
+      // urlencoded без явного Content-Type -> без preflight
       const body = new URLSearchParams({
         loginOrEmail: login,
         login,
@@ -55,8 +53,8 @@ export default function LoginPage() {
 
       const res = await fetchWithRetry(`${API}/auth/login`, {
         method: 'POST',
-        credentials: 'include', // чтобы кука приклеилась
-        body,                    // Content-Type выставит браузер: application/x-www-form-urlencoded
+        credentials: 'include',
+        body,
       });
 
       if (!res.ok) {
