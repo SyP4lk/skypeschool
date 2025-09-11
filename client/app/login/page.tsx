@@ -3,7 +3,7 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
-const API = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, ''); // https://skypeschool-server.onrender.com/api
+const API = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,11 +18,14 @@ export default function LoginPage() {
     setOk(false);
 
     try {
+      // КЛЮЧЕВОЕ: отправляем оба поля
+      const payload = { loginOrEmail: login, login, password };
+
       const res = await fetch(`${API}/auth/login`, {
         method: 'POST',
-        credentials: 'include', // важно для куки
+        credentials: 'include',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ login, password }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -32,7 +35,7 @@ export default function LoginPage() {
 
       setOk(true);
 
-      // по желанию узнаём роль и уводим в нужный ЛК
+      // Определим роль и унесём в нужный ЛК
       let role: string | undefined;
       try {
         const me = await fetch(`${API}/auth/me`, { credentials: 'include', cache: 'no-store' });
