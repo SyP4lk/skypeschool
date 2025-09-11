@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Request, Response } from 'express';
+import type { CookieOptions } from 'express-serve-static-core'
 import * as argon2 from 'argon2';
 import { PrismaService } from '../../prisma.service';
 
@@ -39,16 +40,21 @@ export class AuthController {
     private readonly jwt: JwtService,
   ) {}
 
-  private cookieOpts() {
+  private cookieOpts(): CookieOptions {
     const isProd = process.env.NODE_ENV === 'production';
-    const maxAge = parseDurationMs(process.env.JWT_EXPIRES_IN || '7d', 7 * 24 * 60 * 60 * 1000);
-    return {
-      httpOnly: true as const,
+    const maxAge = parseDurationMs(
+      process.env.JWT_EXPIRES_IN || '7d',
+      7 * 24 * 60 * 60 * 1000
+    );
+    const sameSite: CookieOptions['sameSite'] = isProd ? 'none' : 'lax';
+    const opts: CookieOptions = {
+      httpOnly: true,
       secure: isProd,
-      sameSite: (isProd ? 'none' : 'lax') as const,
+      sameSite,
       path: '/',
       maxAge,
     };
+    return opts;
   }
 
   @Post('login')
