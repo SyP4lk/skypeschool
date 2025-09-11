@@ -46,47 +46,30 @@ export class AuthController {
     return { httpOnly: true, secure: isProd, sameSite, path: '/' };
   }
   private cookieOpts(): CookieOptions {
-    const maxAge = parseDurationMs(
-      process.env.JWT_EXPIRES_IN || '7d',
-      7 * 24 * 60 * 60 * 1000,
-    );
+    const maxAge = parseDurationMs(process.env.JWT_EXPIRES_IN || '7d', 7 * 24 * 60 * 60 * 1000);
     return { ...this.cookieBase(), maxAge };
   }
 
   @Post('login')
-  async login(
-    @Body() body: any,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async login(@Body() body: any, @Res({ passthrough: true }) res: Response) {
     // Принимаем JSON и x-www-form-urlencoded; нормализуем поля
-    const ident = String(
-      (body?.loginOrEmail ?? body?.login ?? body?.email ?? '') || '',
-    ).trim();
+    const ident = String((body?.loginOrEmail ?? body?.login ?? body?.email ?? '') || '').trim();
     const password = String((body?.password ?? body?.pwd ?? '') || '').trim();
+    if (!ident || !password) throw new UnauthorizedException('invalid_credentials');
 
-    if (!ident || !password) {
-      throw new UnauthorizedException('invalid_credentials');
-    }
-
-    // Пробуем найти пользователя (учитываем, что email/phone могут отсутствовать в старой БД)
-    let user: any = null;
+    // Ищем по login/email/phone; если колонок нет — фолбэк к login
+    let user: { id: string; login: string; role: string; passwordHash: string | null } | null = null;
     try {
       user = await this.prisma.user.findFirst({
         where: { OR: [{ login: ident }, { email: ident }, { phone: ident }] } as any,
-        select: {
-          id: true, login: true, role: true,
-          passwordHash: true, password: true, hash: true,
-        } as any,
+        select: { id: true, login: true, role: true, passwordHash: true } as any,
       });
     } catch (e: any) {
       const msg = String(e?.message || '');
       if (e?.code === 'P2022' || /column.*User\.(email|phone)/i.test(msg)) {
         user = await this.prisma.user.findFirst({
           where: { login: ident } as any,
-          select: {
-            id: true, login: true, role: true,
-            passwordHash: true, password: true, hash: true,
-          } as any,
+          select: { id: true, login: true, role: true, passwordHash: true } as any,
         });
       } else {
         this.log.error(`Login prisma error: ${msg}`);
@@ -94,65 +77,44 @@ export class AuthController {
       }
     }
 
-    // --- Основная ветка проверки пароля через argon2 ---
-    if (user) {
-      const hash: unknown = user.passwordHash ?? user.password ?? user.hash ?? null;
-      if (typeof hash === 'string' && hash) {
-        try {
-          const ok = /^\$argon2(id|i|d)\$/.test(hash)
-            ? await argon2.verify(hash, password)
-            : false;
-          if (ok) {
-            const token = await this.jwt.signAsync(
-              { sub: user.id, role: user.role, login: user.login },
-              {
-                secret: process.env.JWT_SECRET || 'dev',
-                expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-              },
-            );
-            res.cookie('token', token, this.cookieOpts());
-            return { ok: true, id: user.id, role: user.role, login: user.login };
-          }
-        } catch (e: any) {
-          this.log.warn(`argon2.verify failed: ${e?.message || e}`);
-          // пойдём в self-heal ниже, если это админ
+    // Основная ветка верификации
+    if (user && typeof user.passwordHash === 'string' && user.passwordHash) {
+      try {
+        const ok = /^\$argon2(id|i|d)\$/.test(user.passwordHash)
+          ? await argon2.verify(user.passwordHash, password)
+          : false;
+        if (ok) {
+          const token = await this.jwt.signAsync(
+            { sub: user.id, role: user.role, login: user.login },
+            { secret: process.env.JWT_SECRET || 'dev', expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
+          );
+          res.cookie('token', token, this.cookieOpts());
+          return { ok: true, id: user.id, role: user.role, login: user.login };
         }
+      } catch (e: any) {
+        this.log.warn(`argon2.verify failed: ${e?.message || e}`);
       }
     }
 
-    // --- SELF-HEAL ДЛЯ АДМИНА (без Shell) ---
-    // Если ввели ADMIN_LOGIN/ADMIN_INITIAL_PASSWORD, а юзера нет или хэш некорректный —
-    // создаём/обновляем админа с argon2id и логиним.
+    // SELF-HEAL для админа без Shell
     const adminLogin = String(process.env.ADMIN_LOGIN || 'admin');
-    const adminPass = String(process.env.ADMIN_INITIAL_PASSWORD || 'Admin12345!');
+    const adminPass  = String(process.env.ADMIN_INITIAL_PASSWORD || 'Admin12345!');
     if (ident === adminLogin && password === adminPass) {
       const newHash = await argon2.hash(adminPass, { type: argon2.argon2id });
-      const created = await this.prisma.user.upsert({
+      const up = await this.prisma.user.upsert({
         where: { login: adminLogin },
         update: { role: 'admin', passwordHash: newHash },
-        create: {
-          login: adminLogin,
-          role: 'admin',
-          passwordHash: newHash,
-          firstName: 'Admin',
-          lastName: '',
-          balance: 0,
-        },
+        create: { login: adminLogin, role: 'admin', passwordHash: newHash, firstName: 'Admin', lastName: '', balance: 0 },
         select: { id: true, login: true, role: true } as any,
       });
-
       const token = await this.jwt.signAsync(
-        { sub: created.id, role: created.role, login: created.login },
-        {
-          secret: process.env.JWT_SECRET || 'dev',
-          expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-        },
+        { sub: up.id, role: up.role, login: up.login },
+        { secret: process.env.JWT_SECRET || 'dev', expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
       );
       res.cookie('token', token, this.cookieOpts());
-      return { ok: true, id: created.id, role: created.role, login: created.login };
+      return { ok: true, id: up.id, role: up.role, login: up.login };
     }
 
-    // Если не админские креды — ошибка авторизации
     throw new UnauthorizedException('invalid_credentials');
   }
 
@@ -168,7 +130,7 @@ export class AuthController {
         secret: process.env.JWT_SECRET || 'dev',
       });
 
-      // Базовые поля — всегда
+      // Базовые поля
       let user: any = await this.prisma.user.findUnique({
         where: { id: payload?.sub },
         select: {
@@ -179,7 +141,7 @@ export class AuthController {
       });
       if (!user) throw new UnauthorizedException('unauthorized');
 
-      // Опционально дотягиваем email/phone — если колонок нет, игнорируем
+      // Опционально подтягиваем email/phone (если колонок нет — просто игнор)
       try {
         const ext = await this.prisma.user.findUnique({
           where: { id: payload?.sub },
@@ -189,9 +151,7 @@ export class AuthController {
           user.email = ext.email ?? user.email;
           user.phone = ext.phone ?? user.phone;
         }
-      } catch {
-        // ignore (старые БД без колонок)
-      }
+      } catch {}
 
       return user;
     } catch {
