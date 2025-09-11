@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Request, Response } from 'express';
-import type { CookieOptions } from 'express-serve-static-core'
+import type { CookieOptions } from 'express-serve-static-core';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../../prisma.service';
 
@@ -40,21 +40,28 @@ export class AuthController {
     private readonly jwt: JwtService,
   ) {}
 
-  private cookieOpts(): CookieOptions {
+  private cookieBase(): CookieOptions {
     const isProd = process.env.NODE_ENV === 'production';
-    const maxAge = parseDurationMs(
-      process.env.JWT_EXPIRES_IN || '7d',
-      7 * 24 * 60 * 60 * 1000
-    );
     const sameSite: CookieOptions['sameSite'] = isProd ? 'none' : 'lax';
-    const opts: CookieOptions = {
+    return {
       httpOnly: true,
       secure: isProd,
       sameSite,
       path: '/',
-      maxAge,
     };
-    return opts;
+  }
+
+  private cookieOpts(): CookieOptions {
+    const maxAge = parseDurationMs(
+      process.env.JWT_EXPIRES_IN || '7d',
+      7 * 24 * 60 * 60 * 1000,
+    );
+    return { ...this.cookieBase(), maxAge };
+  }
+
+  private clearCookie(res: Response) {
+    // Важно передать те же path/sameSite/secure, чтобы точно стёрлась
+    res.clearCookie('token', this.cookieBase());
   }
 
   @Post('login')
@@ -77,33 +84,66 @@ export class AuthController {
     try {
       user = await this.prisma.user.findFirst({
         where: { OR: [{ login: ident }, { email: ident }, { phone: ident }] } as any,
+        select: {
+          id: true, login: true, role: true,
+          passwordHash: true, password: true, hash: true,
+        } as any,
       });
     } catch (e: any) {
       const msg = String(e?.message || '');
       const code = e?.code;
       if (code === 'P2022' || /column.*User\.(email|phone)/i.test(msg)) {
-        user = await this.prisma.user.findFirst({ where: { login: ident } as any });
+        user = await this.prisma.user.findFirst({
+          where: { login: ident } as any,
+          select: {
+            id: true, login: true, role: true,
+            passwordHash: true, password: true, hash: true,
+          } as any,
+        });
       } else {
-        this.log.error('Login error (query)', msg);
-        throw e;
+        // не раскрываем детали наружу
+        this.log.error(`Login prisma error: ${msg}`);
+        throw new UnauthorizedException('invalid_credentials');
       }
     }
 
     if (!user) throw new UnauthorizedException('invalid_credentials');
 
-    const hash: string | null = (user as any).passwordHash ?? (user as any).password ?? (user as any).hash ?? null;
-    if (!hash) throw new UnauthorizedException('invalid_credentials');
+    const hash: unknown = user.passwordHash ?? user.password ?? user.hash ?? null;
+    if (typeof hash !== 'string' || !hash) {
+      throw new UnauthorizedException('invalid_credentials');
+    }
 
-    const ok = await argon2.verify(hash, password);
+    // verify может бросить, если хэш не argon2/битый — считаем как неверный пароль
+    let ok = false;
+    try {
+      if (/^\$argon2(id|i|d)\$/.test(hash)) {
+        ok = await argon2.verify(hash, password);
+      } else {
+        ok = false;
+      }
+    } catch (e: any) {
+      this.log.warn(`argon2.verify failed: ${e?.message || e}`);
+      ok = false;
+    }
     if (!ok) throw new UnauthorizedException('invalid_credentials');
 
     const token = await this.jwt.signAsync(
       { sub: user.id, role: user.role, login: user.login },
-      { secret: process.env.JWT_SECRET || 'dev', expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
+      {
+        secret: process.env.JWT_SECRET || 'dev',
+        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+      },
     );
 
     res.cookie('token', token, this.cookieOpts());
     return { ok: true, id: user.id, role: user.role, login: user.login };
+  }
+
+  @Post('logout')
+  async logout(@Res({ passthrough: true }) res: Response) {
+    this.clearCookie(res);
+    return { ok: true };
   }
 
   @Get('me')
