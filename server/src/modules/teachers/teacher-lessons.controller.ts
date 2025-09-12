@@ -18,6 +18,21 @@ function toDbStatus(s?: string): string | undefined {
   return undefined;
 }
 
+/** Надёжный парсер цены в копейках:
+ * - Принимает number или string (поддерживает запятую как десятичный разделитель).
+ * - Типовой кейс: в UI вводят цену в ₽ (< 10 000) — умножаем на 100.
+ * - Если пришло большое число (>= 10 000), считаем, что это уже копейки.
+ */
+function toMinor(value: any): number {
+  if (value === null || value === undefined) return 0;
+  const s = String(value).replace(',', '.').trim();
+  if (!s) return 0;
+  const n = Number(s);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  // Типовые цены урока в ₽ < 10 000
+  return n < 10000 ? Math.round(n * 100) : Math.round(n);
+}
+
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('teacher')
 export class TeacherLessonsController {
@@ -55,24 +70,33 @@ export class TeacherLessonsController {
   @Roles('teacher')
   async createLesson(
     @Req() req: any,
-    @Body() body: { studentId: string; subjectId: string; startsAt: string; durationMin: number; price: number; comment?: string },
+    @Body() body: { studentId: string; subjectId: string; startsAt: string; durationMin: number; price: number | string; comment?: string },
   ) {
     const teacherId = req.user.sub as string;
     const startsAt = new Date(body.startsAt);
     if (isNaN(startsAt.getTime())) throw new BadRequestException('startsAt invalid');
     if (!body.studentId || !body.subjectId) throw new BadRequestException('studentId & subjectId required');
-    if (!body.durationMin || body.durationMin <= 0) throw new BadRequestException('durationMin invalid');
-    if (typeof body.price !== 'number') throw new BadRequestException('price required');
+    if (!body.durationMin || Number(body.durationMin) <= 0) throw new BadRequestException('durationMin invalid');
+
+    const priceMinor = toMinor(body.price);
+    if (priceMinor <= 0) throw new BadRequestException('price required');
 
     const student = await this.prisma.user.findUnique({ where: { id: body.studentId } });
     if (!student || student.role !== 'student') throw new BadRequestException('student not found');
 
-    const end = new Date(startsAt.getTime() + body.durationMin * 60000);
-    // overlap check in JS
+    const end = new Date(startsAt.getTime() + Number(body.durationMin) * 60000);
+
+    // Проверка пересечений (в JS, учитываем только planned в окрестности 6ч)
     const future = await (this.prisma as any).lesson.findMany({
-      where: { teacherId, status: 'planned', startsAt: { gte: new Date(startsAt.getTime() - 6 * 3600 * 1000) } },
+      where: {
+        teacherId,
+        status: 'planned',
+        startsAt: { gte: new Date(startsAt.getTime() - 6 * 3600 * 1000) },
+      },
       take: 100,
+      orderBy: { startsAt: 'desc' },
     });
+
     const overlap = future.some((l: any) => {
       const s = new Date(l.startsAt).getTime();
       const d = Number(l.duration ?? 0);
@@ -81,18 +105,18 @@ export class TeacherLessonsController {
     });
     if (overlap) throw new BadRequestException('time overlap');
 
-    // in your DB, required channel exists; choose a safe default ('skype' is defined)
+    // channel обязателен по схеме — берём безопасный дефолт
     const data: any = {
       teacherId,
       studentId: body.studentId,
       subjectId: body.subjectId,
       startsAt,
-      duration: body.durationMin,
-      price: body.price,
+      duration: Number(body.durationMin),
+      price: priceMinor, // ⬅️ сохраняем в КОПЕЙКАХ
       status: 'planned',
       channel: 'skype',
     };
-    // comment/note is not persisted because current DB model doesn't have a field for it
+    // comment/note не сохраняем — поля нет в текущей схеме
 
     return (this.prisma as any).lesson.create({ data });
   }
@@ -118,16 +142,16 @@ export class TeacherLessonsController {
       await tx.user.update({ where: { id: student.id }, data: { balance: { decrement: lesson.price } } });
       await tx.user.update({ where: { id: teacher.id }, data: { balance: { increment: lesson.price } } });
 
-      // Write finance log for both sides (minimal shape for BalanceChange)
+      // Пишем в журнал (минимальная форма BalanceChange)
       try {
         await tx.balanceChange.createMany({
           data: [
-            { userId: student.id, delta: -lesson.price, reason: `Lesson charge ${lesson.id}` },
-            { userId: teacher.id, delta:  lesson.price, reason: `Lesson income ${lesson.id}` },
+            { userId: student.id, delta: -Number(lesson.price || 0), reason: `Lesson charge ${lesson.id}` },
+            { userId: teacher.id, delta:  Number(lesson.price || 0), reason: `Lesson income ${lesson.id}` },
           ],
         });
       } catch (_) {
-        // ignore if model differs
+        // если модель другая — молча пропускаем
       }
 
       return tx.lesson.update({ where: { id: lesson.id }, data: { status: 'completed' } });

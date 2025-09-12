@@ -17,13 +17,15 @@ function normalizeStatus(s?: string | null) {
   return v || 'PLANNED';
 }
 
-function loadFS() {
-  try {
-    const file = path.join(process.cwd(), 'public', 'settings.json');
-    if (fs.existsSync(file)) {
-      return JSON.parse(fs.readFileSync(file, 'utf8') || '{}');
-    }
-  } catch {}
+function tryLoadJson(...paths: string[]) {
+  for (const p of paths) {
+    try {
+      if (fs.existsSync(p)) {
+        const txt = fs.readFileSync(p, 'utf8');
+        return JSON.parse(txt || '{}');
+      }
+    } catch {}
+  }
   return {};
 }
 
@@ -63,31 +65,38 @@ export class StudentMeController {
 
   /** Public topup instructions for Student LK
    *  Priority:
-   *   1) settings/setting/systemSetting key = 'payment_instructions'
-   *   2) legacy systemSetting key = 'student_topup_text'
-   *   3) /public/settings.json { student_topup_text }
+   *   1) DB settings tables with keys:
+   *      'payment_instructions' | 'topup_instructions' | 'student_topup_text' | 'topupText' | 'topup_text'
+   *   2) /public/settings.json (ищем и из cwd, и уровнем выше) по тем же ключам
    */
   @Get('topup-text')
   async topupText() {
     const p: AnyRec = this.prisma as any;
+    const keys = ['payment_instructions', 'topup_instructions', 'student_topup_text', 'topupText', 'topup_text'];
 
-    // 1) payment_instructions (new key for both admin & public)
-    try {
-      const row =
-        (await p.setting?.findUnique?.({ where: { key: 'payment_instructions' } })) ||
-        (await p.settings?.findUnique?.({ where: { key: 'payment_instructions' } })) ||
-        (await p.systemSetting?.findUnique?.({ where: { key: 'payment_instructions' } }));
-      if (row?.value != null) return { text: String(row.value) };
-    } catch {}
+    // 1) База (Setting/Settings/SystemSetting)
+    for (const key of keys) {
+      try {
+        const row =
+          (await p.setting?.findUnique?.({ where: { key } })) ||
+          (await p.settings?.findUnique?.({ where: { key } })) ||
+          (await p.systemSetting?.findUnique?.({ where: { key } }));
+        const val = row?.value;
+        if (val != null && String(val).trim()) return { text: String(val) };
+      } catch {}
+    }
 
-    // 2) legacy
-    try {
-      const row = await p.systemSetting?.findUnique?.({ where: { key: 'student_topup_text' } });
-      if (row?.value != null) return { text: String(row.value) };
-    } catch {}
+    // 2) Файл public/settings.json (cwd и ../public)
+    const fsObj =
+      tryLoadJson(
+        path.join(process.cwd(), 'public', 'settings.json'),
+        path.join(process.cwd(), '..', 'public', 'settings.json'),
+      ) || {};
+    for (const key of keys) {
+      const val = (fsObj as any)[key];
+      if (val != null && String(val).trim()) return { text: String(val) };
+    }
 
-    // 3) fallback to file
-    const fsObj = loadFS();
-    return { text: String(fsObj.student_topup_text || '') };
+    return { text: '' };
   }
 }
