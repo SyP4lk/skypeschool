@@ -18,10 +18,8 @@ function toDbStatus(s?: string): string | undefined {
   return undefined;
 }
 
-/** Надёжный парсер цены в копейках:
- * - Принимает number или string (поддерживает запятую как десятичный разделитель).
- * - Типовой кейс: в UI вводят цену в ₽ (< 10 000) — умножаем на 100.
- * - Если пришло большое число (>= 10 000), считаем, что это уже копейки.
+/** Конвертируем цену в копейках. Принимаем number|string (с запятой).
+ *  Если значение < 10000 — трактуем как ₽ и умножаем на 100.
  */
 function toMinor(value: any): number {
   if (value === null || value === undefined) return 0;
@@ -29,7 +27,6 @@ function toMinor(value: any): number {
   if (!s) return 0;
   const n = Number(s);
   if (!Number.isFinite(n) || n <= 0) return 0;
-  // Типовые цены урока в ₽ < 10 000
   return n < 10000 ? Math.round(n * 100) : Math.round(n);
 }
 
@@ -86,17 +83,11 @@ export class TeacherLessonsController {
 
     const end = new Date(startsAt.getTime() + Number(body.durationMin) * 60000);
 
-    // Проверка пересечений (в JS, учитываем только planned в окрестности 6ч)
     const future = await (this.prisma as any).lesson.findMany({
-      where: {
-        teacherId,
-        status: 'planned',
-        startsAt: { gte: new Date(startsAt.getTime() - 6 * 3600 * 1000) },
-      },
+      where: { teacherId, status: 'planned', startsAt: { gte: new Date(startsAt.getTime() - 6 * 3600 * 1000) } },
       take: 100,
       orderBy: { startsAt: 'desc' },
     });
-
     const overlap = future.some((l: any) => {
       const s = new Date(l.startsAt).getTime();
       const d = Number(l.duration ?? 0);
@@ -105,18 +96,16 @@ export class TeacherLessonsController {
     });
     if (overlap) throw new BadRequestException('time overlap');
 
-    // channel обязателен по схеме — берём безопасный дефолт
     const data: any = {
       teacherId,
       studentId: body.studentId,
       subjectId: body.subjectId,
       startsAt,
       duration: Number(body.durationMin),
-      price: priceMinor, // ⬅️ сохраняем в КОПЕЙКАХ
+      price: priceMinor,
       status: 'planned',
       channel: 'skype',
     };
-    // comment/note не сохраняем — поля нет в текущей схеме
 
     return (this.prisma as any).lesson.create({ data });
   }
@@ -142,7 +131,6 @@ export class TeacherLessonsController {
       await tx.user.update({ where: { id: student.id }, data: { balance: { decrement: lesson.price } } });
       await tx.user.update({ where: { id: teacher.id }, data: { balance: { increment: lesson.price } } });
 
-      // Пишем в журнал (минимальная форма BalanceChange)
       try {
         await tx.balanceChange.createMany({
           data: [
@@ -150,9 +138,7 @@ export class TeacherLessonsController {
             { userId: teacher.id, delta:  Number(lesson.price || 0), reason: `Lesson income ${lesson.id}` },
           ],
         });
-      } catch (_) {
-        // если модель другая — молча пропускаем
-      }
+      } catch {}
 
       return tx.lesson.update({ where: { id: lesson.id }, data: { status: 'completed' } });
     });

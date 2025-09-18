@@ -1,4 +1,4 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Param, Patch, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { Roles } from '../common/roles.decorator';
 import { RolesGuard } from '../common/roles.guard';
@@ -17,13 +17,10 @@ function normalizeStatus(s?: string | null) {
   return v || 'PLANNED';
 }
 
-function tryLoadJson(...paths: string[]) {
-  for (const p of paths) {
+function tryLoadJson(...pathsArr: string[]) {
+  for (const pth of pathsArr) {
     try {
-      if (fs.existsSync(p)) {
-        const txt = fs.readFileSync(p, 'utf8');
-        return JSON.parse(txt || '{}');
-      }
+      if (fs.existsSync(pth)) return JSON.parse(fs.readFileSync(pth, 'utf8') || '{}');
     } catch {}
   }
   return {};
@@ -36,17 +33,34 @@ export class StudentMeController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get('lessons')
-  async myLessons(@Req() req: Request) {
+  async myLessons(
+    @Req() req: Request,
+    @Query('status') status?: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+  ) {
     const studentId = (req as any).user.sub as string;
+
+    const where: any = { studentId };
+    const st = (status || '').toLowerCase();
+    if (st === 'planned') where.status = 'planned';
+    if (st === 'done' || st === 'completed') where.status = 'completed';
+    if (st === 'canceled' || st === 'cancelled') where.status = 'cancelled';
+
+    const take = Math.max(1, Math.min(Number(limit || 20), 50));
+    const skip = (Math.max(1, Number(page || 1)) - 1) * take;
+
     let rows: any[] = [];
     try {
       rows = await (this.prisma as any).lesson.findMany({
-        where: { studentId },
-        orderBy: { startsAt: 'asc' },
+        where,
+        orderBy: { startsAt: st === 'planned' ? 'asc' : 'desc' },
         include: {
           subject: true,
           teacher: { select: { id: true, login: true, firstName: true, lastName: true } },
         },
+        skip,
+        take,
       });
     } catch {
       rows = [];
@@ -63,18 +77,28 @@ export class StudentMeController {
     }));
   }
 
-  /** Public topup instructions for Student LK
-   *  Priority:
-   *   1) DB settings tables with keys:
-   *      'payment_instructions' | 'topup_instructions' | 'student_topup_text' | 'topupText' | 'topup_text'
-   *   2) /public/settings.json (ищем и из cwd, и уровнем выше) по тем же ключам
-   */
+  @Patch('lessons/:id/cancel')
+  async cancelByStudent(@Req() req: Request, @Param('id') id: string) {
+    const studentId = (req as any).user.sub as string;
+    const lesson = await (this.prisma as any).lesson.findUnique({ where: { id } });
+    if (!lesson || lesson.studentId !== studentId) throw new BadRequestException('lesson not found');
+    if (lesson.status === 'completed') throw new BadRequestException('already done');
+
+    const startsAt = new Date(lesson.startsAt).getTime();
+    const now = Date.now();
+    const eightHoursMs = 8 * 60 * 60 * 1000;
+    if (startsAt - now < eightHoursMs) {
+      throw new BadRequestException('too_late_to_cancel');
+    }
+
+    return (this.prisma as any).lesson.update({ where: { id }, data: { status: 'cancelled' } });
+  }
+
   @Get('topup-text')
   async topupText() {
     const p: AnyRec = this.prisma as any;
     const keys = ['payment_instructions', 'topup_instructions', 'student_topup_text', 'topupText', 'topup_text'];
 
-    // 1) База (Setting/Settings/SystemSetting)
     for (const key of keys) {
       try {
         const row =
@@ -86,7 +110,6 @@ export class StudentMeController {
       } catch {}
     }
 
-    // 2) Файл public/settings.json (cwd и ../public)
     const fsObj =
       tryLoadJson(
         path.join(process.cwd(), 'public', 'settings.json'),
@@ -96,7 +119,6 @@ export class StudentMeController {
       const val = (fsObj as any)[key];
       if (val != null && String(val).trim()) return { text: String(val) };
     }
-
     return { text: '' };
   }
 }
