@@ -69,14 +69,15 @@ export class AuthController {
     const password = String(body?.password || '').trim();
     const firstName = String(body?.firstName || '').trim();
     const lastName  = String(body?.lastName || '').trim();
+    const phone     = String(body?.phone || '').trim();       // ✅ телефон
     const messengerType = String(body?.messengerType || '').trim();
     const messengerVal  = String(body?.messenger || '').trim();
 
-    if (!password || !firstName || !lastName || !messengerVal || (!login && !email)) {
+    if (!password || !firstName || !lastName || !messengerVal || !phone || (!login && !email)) {
       throw new BadRequestException('required_fields');
     }
 
-    const phone = messengerType ? `${messengerType}:${messengerVal}` : messengerVal;
+    const messengerNote = messengerType ? `${messengerType}:${messengerVal}` : messengerVal;
 
     if (login) {
       const exists = await this.prisma.user.findUnique({ where: { login } }).catch(() => null);
@@ -103,7 +104,8 @@ export class AuthController {
         passwordHash,
         firstName,
         lastName,
-        phone,
+        phone: phone || undefined,
+        messenger: messengerNote || undefined,
         balance: 0,
       },
       select: { id: true, login: true, role: true },

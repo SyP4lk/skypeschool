@@ -22,15 +22,21 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');           // ✅ телефон
   const [messenger, setMessenger] = useState<Messenger>('telegram');
   const [messengerValue, setMessengerValue] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const valid = useMemo(() => {
+  const valid = (() => {
     const hasIdent = (login.trim() !== '') || (email.trim() !== '');
-    return hasIdent && password.trim() !== '' && firstName.trim() !== '' && lastName.trim() !== '' && messengerValue.trim() !== '';
-  }, [login, email, password, firstName, lastName, messengerValue]);
+    return hasIdent
+      && password.trim() !== ''
+      && firstName.trim() !== ''
+      && lastName.trim() !== ''
+      && phone.trim() !== ''
+      && messengerValue.trim() !== '';
+  })();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +50,7 @@ export default function RegisterPage() {
       body.set('password', password);
       body.set('firstName', firstName);
       body.set('lastName', lastName);
+      body.set('phone', phone);                     // ✅ передаём телефон
       body.set('messengerType', messenger);
       body.set('messenger', messengerValue);
 
@@ -54,7 +61,7 @@ export default function RegisterPage() {
       });
 
       if (resp.ok) {
-        const me = await fetch(`${API}/auth/me`, { credentials: 'include' });
+        const me = await fetch(`${API}/auth/me`, { credentials: 'include', cache: 'no-store' });
         if (me.ok) {
           const u = await me.json();
           if (u.role === 'admin') router.replace('/admin');
@@ -108,6 +115,11 @@ export default function RegisterPage() {
             <label className="block mb-1">Фамилия <span className="text-red-600">*</span></label>
             <input value={lastName} onChange={e => setLastName(e.target.value)} className="border p-2 w-full rounded" />
           </div>
+        </div>
+
+        <div>
+          <label className="block mb-1">Телефон <span className="text-red-600">*</span></label>
+          <input value={phone} onChange={e => setPhone(e.target.value)} className="border p-2 w-full rounded" placeholder="+7 900 000-00-00" />
         </div>
 
         <div>
