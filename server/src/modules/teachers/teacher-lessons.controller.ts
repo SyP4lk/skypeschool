@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Post, Req } from '@nestjs/common';
-import { PrismaService } from '../../prisma.service'; // <-- фикс пути
+import { PrismaService } from '../../prisma.service';
 import { isP2021, isP2022 } from '../../common/prisma.util';
 
 @Controller('teacher/me/lessons')
@@ -14,18 +14,20 @@ export class TeacherLessonsController {
 
     let student: any = null;
     try {
+      // Пытаемся взять из User.balance (если есть)
       student = await this.prisma.user.findUnique({
         where: { id: dto.studentId },
         select: { id: true, balance: true } as any,
       } as any);
     } catch (e) {
       if (isP2022(e) || isP2021(e)) {
+        // Фоллбек на StudentProfile: берём только userId; balance читаем через any
         try {
           const sp = await this.prisma.studentProfile.findUnique({
             where: { userId: dto.studentId },
-            select: { userId: true, balance: true } as any,
+            select: { userId: true } as any,
           } as any);
-          if (sp) student = { id: sp.userId, balance: sp.balance };
+          if (sp) student = { id: sp.userId, balance: (sp as any)?.balance };
         } catch {}
       } else {
         throw e;
@@ -40,7 +42,7 @@ export class TeacherLessonsController {
     }
     // --- /проверка баланса ---
 
-    // TODO: здесь остаются ваши проверки пересечений по времени и пр.
+    // TODO: ваши проверки пересечений по времени остаются здесь
 
     // Безопасное создание: сначала пробуем с price, если колонки нет — без неё
     try {
@@ -56,7 +58,6 @@ export class TeacherLessonsController {
       });
     } catch (e) {
       if (isP2021(e) || isP2022(e)) {
-        // Повтор без поля price (если колонки нет)
         return await this.prisma.lesson.create({
           data: {
             teacherId: req?.user?.id,
