@@ -1,70 +1,63 @@
 'use client';
-import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
-const API_BASE = '';
-
-async function api(path: string, init: RequestInit = {}) {
-  const res = await fetch(`${API_BASE}/api${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init.headers || {}),
-    },
-    credentials: 'include',
-    cache: 'no-store',
-  });
-  const txt = await res.text().catch(()=>'');
-  let data: any = null;
-  try { data = txt ? JSON.parse(txt) : null; } catch {}
-  if (!res.ok) throw new Error((data && (data.message || data.error)) || txt || `HTTP ${res.status}`);
-  return data;
-}
-
-// Try to fetch current user from likely endpoints
-async function fetchMe(): Promise<any|null> {
-  const tryUrls = ['/auth/me', '/users/me', '/me'];
-  for (const url of tryUrls) {
-    try {
-      const me = await api(url, { method: 'GET' });
-      if (me) return me;
-    } catch (_e) {}
-  }
-  return null;
-}
-
-function redirectByRole(router: ReturnType<typeof useRouter>, role?: string) {
-  const r = String(role || '').toLowerCase();
-  if (r === 'admin') router.push('/admin/finance');
-  else if (r === 'teacher') router.push('/lk/teacher');
-  else router.push('/lk/student');
-}
+const API = (process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/$/, '');
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [login, setLogin] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string|null>(null);
   const [msg, setMsg] = useState<string|null>(null);
-  const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
-  const onSubmit = async (e: any) => {
+  async function warmup() {
+    try { await fetch(`${API}/health`, { credentials: 'include' }); } catch {}
+  }
+
+  async function doLogin() {
+    const form = new URLSearchParams();
+    form.set('identifier', identifier);
+    form.set('password', password);
+    return fetch(`${API}/auth/login`, {
+      method: 'POST',
+      body: form,           // x-www-form-urlencoded
+      credentials: 'include',
+    });
+  }
+
+  async function fetchMe() {
+    try {
+      const r = await fetch(`${API}/auth/me`, { credentials: 'include' });
+      if (!r.ok) return null;
+      return await r.json();
+    } catch { return null; }
+  }
+
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null); setMsg(null); setLoading(true);
-    try {
-      await api('/auth/login', { method: 'POST', body: JSON.stringify({ login, password }) });
-      // try to detect role and redirect
-      const me = await fetchMe();
-      const role = (me?.role) || (me?.user?.role) || (me?.data?.role);
-      setMsg('Успешный вход');
-      redirectByRole(router, role);
-    } catch (e:any) {
-      setErr(e?.message || 'Ошибка входа');
-    } finally {
-      setLoading(false);
+    await warmup();
+    let resp: Response | null = null;
+    try { resp = await doLogin(); } catch {}
+    if (!resp || !resp.ok) {
+      await new Promise(r => setTimeout(r, 1200));
+      try { resp = await doLogin(); } catch {}
     }
-  };
+    if (!resp || !resp.ok) {
+      setErr('Не удалось войти. Проверьте данные.');
+      setLoading(false);
+      return;
+    }
+    setMsg('Успешный вход');
+    const me = await fetchMe();
+    const role = (me?.role) || (me?.user?.role) || (me?.data?.role);
+    if (role === 'admin') router.replace('/admin/finance');
+    else if (role === 'teacher') router.replace('/lk/teacher');
+    else router.replace('/lk/student');
+    setLoading(false);
+  }
 
   return (
     <div className="max-w-md mx-auto py-10">
@@ -73,8 +66,8 @@ export default function LoginPage() {
       {msg && <div className="mb-3 px-3 py-2 rounded border border-green-300 bg-green-50 text-green-800">{msg}</div>}
       <form className="space-y-3" onSubmit={onSubmit}>
         <div>
-          <label className="text-sm block mb-1">Логин или email</label>
-          <input className="w-full rounded border px-3 py-2" value={login} onChange={e=>setLogin(e.target.value)} required />
+          <label className="text-sm block mb-1">Логин / Email / Телефон</label>
+          <input className="w-full rounded border px-3 py-2" value={identifier} onChange={e=>setIdentifier(e.target.value)} required />
         </div>
         <div>
           <label className="text-sm block mb-1">Пароль</label>
@@ -84,9 +77,6 @@ export default function LoginPage() {
           {loading ? 'Входим…' : 'Войти'}
         </button>
       </form>
-      <div className="mt-4 text-sm">
-        Нет аккаунта? <Link href="/register" className="text-blue-600 hover:underline">Зарегистрироваться</Link>
-      </div>
     </div>
   );
 }

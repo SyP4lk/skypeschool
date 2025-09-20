@@ -1,4 +1,5 @@
 'use client';
+import { useToast } from '@/shared/ui/Toast';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../_lib/api';
 
@@ -6,6 +7,7 @@ type Subject = { id: string; name: string; price?: number; duration?: number };
 type Student = { id: string; login: string; firstName?: string|null; lastName?: string|null; phone?: string|null; email?: string|null };
 
 export default function CreateLessonForm() {
+  const toast = useToast();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [q, setQ] = useState('');
@@ -63,7 +65,7 @@ export default function CreateLessonForm() {
       setMsg('Урок назначен');
       setStudentId(''); setSubjectId(''); setStartsAt(''); setDuration(''); setPrice(''); setNote('');
     } catch (e:any) {
-      setErr(e?.message || 'Ошибка');
+      setErr(e?.message || 'Ошибка'); toast({ type:'error', message: e?.message || 'Ошибка' });
     }
   }
 

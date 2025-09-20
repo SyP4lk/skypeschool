@@ -32,6 +32,11 @@ async function bootstrap() {
   // Глобальный префикс API
   app.setGlobalPrefix('api');
 
+  // Health endpoint for warm-up
+  const http = (app.getHttpAdapter() as any).getInstance?.() || app.getHttpAdapter();
+  try { http.get('/api/health', (_req:any, res:any) => res.status(200).send('ok')); } catch {}
+
+
   const port = Number(process.env.PORT || 3000);
   await app.listen(port, '0.0.0.0');
   // eslint-disable-next-line no-console
