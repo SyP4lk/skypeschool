@@ -41,8 +41,14 @@ async function bootstrap() {
   };
   app.enableCors(corsOptions);
 
-  // Быстрый health для прогрева
+  // ---- Будилка Render ----
+  // Корень
+  expressApp.get('/', (_req: any, res: any) => res.status(200).send('ok'));
+  expressApp.head('/', (_req: any, res: any) => res.status(200).end());
+  // Health
   expressApp.get('/api/health', (_req: any, res: any) => res.status(200).send('ok'));
+  expressApp.head('/api/health', (_req: any, res: any) => res.status(200).end());
+  // ------------------------
 
   const port = process.env.PORT || 3001;
   await app.listen(port);
