@@ -1,55 +1,54 @@
 'use client';
-import { useState } from 'react';
-import Link from 'next/link';
+
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { useToast } from '@/shared/ui/Toast';
 
 const API = (process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/$/, '');
 
 export default function LoginPage() {
-  const [login, setLogin] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const toast = useToast();
   const router = useRouter();
 
-  async function warmup() { try { await fetch(`${API}/health`, { credentials: 'include' }); } catch {} }
+  async function warmup() {
+    try { await fetch(`${API}/health`, { credentials: 'include' }); } catch {}
+  }
 
   async function doLogin() {
     const form = new URLSearchParams();
-    form.set('login', login);
+    form.set('identifier', identifier);
     form.set('password', password);
-    return fetch(`${API}/auth/login`, { method: 'POST', body: form, credentials: 'include' });
+    return fetch(`${API}/auth/login`, {
+      method: 'POST',
+      body: form,
+      credentials: 'include',
+    });
   }
 
-  async function fetchMe() {
-    try { const r = await fetch(`${API}/auth/me`, { credentials: 'include' }); if (!r.ok) return null; return await r.json(); } catch { return null; }
-  }
-
-  async function redirectByRole() {
-    const me = await fetchMe();
-    const role = me?.role || me?.user?.role;
-    if (role === 'student') router.replace('/lk/student');
-    else if (role === 'teacher') router.replace('/lk/teacher');
-    else router.replace('/admin');
-  }
-
-  async function onSubmit(e: any) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     await warmup();
-    let resp = await doLogin().catch(() => null);
+    let resp: Response | null = null;
+    try { resp = await doLogin(); } catch {}
     if (!resp || !resp.ok) {
-      await new Promise(r => setTimeout(r, 1000));
-      resp = await doLogin().catch(() => null);
+      await new Promise(r => setTimeout(r, 900));
+      try { resp = await doLogin(); } catch {}
     }
     if (!resp || !resp.ok) {
       toast({ type: 'error', message: 'Не удалось войти. Проверьте данные.' });
       setLoading(false);
       return;
     }
+    const me = await fetch(`${API}/auth/me`, { credentials: 'include' }).then(r => r.ok ? r.json() : null);
+    const role = me?.role;
+    if (role === 'student') router.replace('/lk/student');
+    else if (role === 'teacher') router.replace('/lk/teacher');
+    else router.replace('/admin');
     toast({ type: 'success', message: 'Вход выполнен' });
-    await redirectByRole();
     setLoading(false);
   }
 
@@ -57,21 +56,16 @@ export default function LoginPage() {
     <div className="max-w-md mx-auto p-6">
       <h1 className="text-xl font-semibold mb-4">Вход</h1>
       <form onSubmit={onSubmit} className="flex flex-col gap-3">
-        <div>
-          <label className="text-sm block mb-1">Логин / Email / Телефон</label>
-          <input className="w-full rounded border p-2" value={login} onChange={e=>setLogin(e.target.value)} required />
-        </div>
-        <div>
-          <label className="text-sm block mb-1">Пароль</label>
-          <input type="password" className="w-full rounded border p-2" value={password} onChange={e=>setPassword(e.target.value)} required />
-        </div>
-        <button className="px-4 py-2 rounded border bg-blue-600 text-white disabled:opacity-60" disabled={loading}>
+        <input required placeholder="Логин / Email / Телефон"
+               value={identifier} onChange={e=>setIdentifier(e.target.value)}
+               className="border rounded p-2" />
+        <input required type="password" placeholder="Пароль"
+               value={password} onChange={e=>setPassword(e.target.value)}
+               className="border rounded p-2" />
+        <button disabled={loading} className="rounded bg-black text-white py-2">
           {loading ? 'Входим…' : 'Войти'}
         </button>
       </form>
-      <div className="mt-4 text-sm">
-        Нет аккаунта? <Link href="/register" className="text-blue-600 hover:underline">Зарегистрироваться</Link>
-      </div>
     </div>
   );
 }

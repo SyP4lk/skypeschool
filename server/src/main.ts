@@ -2,44 +2,46 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 import * as express from 'express';
-import { ALLOWED_ORIGINS } from './config/env';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { cors: false });
 
-  // Устанавливаем trust proxy через нативный Express-инстанс (типобезопасно для Nest)
-  const adapter = app.getHttpAdapter() as any;
-  const instance: any = adapter?.getInstance ? adapter.getInstance() : adapter;
-  if (instance?.set) {
-    instance.set('trust proxy', 1);
-  }
+  // Required for Secure cookies behind Render/Cloudflare proxies
+  app.set('trust proxy', 1);
 
-  // CORS для кросс-доменных кук
-  app.enableCors({
-    origin: ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS : true,
-    credentials: true,
-    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    exposedHeaders: ['Set-Cookie'],
-    optionsSuccessStatus: 204,
-  });
-
-  // Парсеры тела и cookie (urlencoded нужен для форм без preflight)
-  app.use(cookieParser());
-  app.use(express.json({ limit: '2mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '5mb' }));
-
-  // Глобальный префикс API
+  // Global API prefix
   app.setGlobalPrefix('api');
 
-  // Health endpoint for warm-up
-  const http = (app.getHttpAdapter() as any).getInstance?.() || app.getHttpAdapter();
-  try { http.get('/api/health', (_req:any, res:any) => res.status(200).send('ok')); } catch {}
+  // Bodies: json + urlencoded (login/register without preflight)
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: true }));
 
+  // Cookies
+  app.use(cookieParser());
 
-  const port = Number(process.env.PORT || 3000);
-  await app.listen(port, '0.0.0.0');
-  // eslint-disable-next-line no-console
-  console.log(`[NestApplication] started on http://localhost:${port}`);
+  // CORS
+  const allowed = (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  app.enableCors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (allowed.includes(origin)) return cb(null, true);
+      return cb(new Error('Not allowed by CORS'), false);
+    },
+    credentials: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Authorization',
+    exposedHeaders: 'Set-Cookie',
+  });
+
+  // Simple health endpoint for warm-up
+  const http = app.getHttpAdapter().getInstance();
+  http.get('/api/health', (_req, res) => res.status(200).send('ok'));
+
+  const port = process.env.PORT || 3001;
+  await app.listen(port);
 }
 bootstrap();
