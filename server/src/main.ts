@@ -1,13 +1,18 @@
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 import * as express from 'express';
+import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { cors: false });
 
+  // Express instance (for trust proxy & health)
+  const expressApp = app.getHttpAdapter().getInstance();
+
   // Required for Secure cookies behind Render/Cloudflare proxies
-  app.set('trust proxy', 1);
+  expressApp.set('trust proxy', 1);
 
   // Global API prefix
   app.setGlobalPrefix('api');
@@ -25,8 +30,8 @@ async function bootstrap() {
     .map(s => s.trim())
     .filter(Boolean);
 
-  app.enableCors({
-    origin: (origin, cb) => {
+  const corsOptions: CorsOptions = {
+    origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
       if (!origin) return cb(null, true);
       if (allowed.includes(origin)) return cb(null, true);
       return cb(new Error('Not allowed by CORS'), false);
@@ -35,11 +40,11 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Authorization',
     exposedHeaders: 'Set-Cookie',
-  });
+  };
+  app.enableCors(corsOptions);
 
   // Simple health endpoint for warm-up
-  const http = app.getHttpAdapter().getInstance();
-  http.get('/api/health', (_req, res) => res.status(200).send('ok'));
+  expressApp.get('/api/health', (_req: any, res: any) => res.status(200).send('ok'));
 
   const port = process.env.PORT || 3001;
   await app.listen(port);

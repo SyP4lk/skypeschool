@@ -1,12 +1,13 @@
+
 import {
   Body, Controller, Get, Post, Req, Res, UnauthorizedException, BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { Response, Request } from 'express';
 import * as argon2 from 'argon2';
 import * as bcrypt from 'bcryptjs';
-import { isP2021, isP2022 } from '../../common/prisma.util';
+import { isP2021, isP2022 } from 'src/common/prisma.util';
 
 type LoginBody = {
   identifier?: string; // login | email | phone
@@ -51,7 +52,6 @@ export class AuthController {
     const hash: string = user.passwordHash;
     let ok = false;
     try {
-      // bcrypt hashes usually start with $2a/$2b/$2y
       if (/^\$2[aby]\$/.test(hash)) {
         ok = await bcrypt.compare(password, hash);
       } else {

@@ -1,6 +1,7 @@
+
 import { BadRequestException, Body, Controller, Post, Req } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { isP2021, isP2022 } from '../../common/prisma.util';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { isP2021, isP2022 } from 'src/common/prisma.util';
 
 @Controller('teacher/me/lessons')
 export class TeacherLessonsController {
@@ -40,13 +41,12 @@ export class TeacherLessonsController {
     }
     // --- /FIX ---
 
-    // TODO: здесь остаются ваши проверки пересечений по времени и прочая логика
+    // TODO: ваши проверки пересечений по времени остаются здесь
 
     // Безопасное создание: сначала пробуем с price, если колонки нет — без неё
     try {
       return await this.prisma.lesson.create({
         data: {
-          // ...ваши поля...
           teacherId: req?.user?.id,
           studentId: dto.studentId,
           ...(priceMinor != null ? { price: priceMinor as any } : {}),
@@ -57,10 +57,8 @@ export class TeacherLessonsController {
       });
     } catch (e) {
       if (isP2021(e) || isP2022(e)) {
-        // повтор без price
         return await this.prisma.lesson.create({
           data: {
-            // ...ваши поля...
             teacherId: req?.user?.id,
             studentId: dto.studentId,
             startsAt: dto.startsAt,
