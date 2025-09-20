@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -50,6 +51,88 @@ export class AuthController {
     return { ...this.cookieBase(), maxAge };
   }
 
+  // ---------- REGISTER ----------
+  @Post('register')
+  async register(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() raw: any) {
+    // 1) Нормализуем тело: поддержка urlencoded/JSON/без заголовка
+    const body: any = (raw && typeof raw === 'object') ? raw : ((req as any).body || {});
+    const login  = String(body?.login ?? '').trim();
+    const email  = String(body?.email ?? '').trim();
+    const pwd    = String(body?.password ?? '').trim();
+    const first  = String(body?.firstName ?? '').trim();
+    const last   = String(body?.lastName ?? '').trim();
+    const phone  = String(body?.phone ?? '').replace(/\D+/g, '');
+    // messenger приходит как "telegram:@nick" / "whatsapp:+7900...", в User не пишем
+
+    // 2) Валидация обязательных полей
+    if (!first || !last || !pwd || !phone) {
+      throw new BadRequestException({ message: 'required_fields' });
+    }
+    if (!login && !email) {
+      throw new BadRequestException({ message: 'login_or_email_required' });
+    }
+
+    // 3) Узнаём, какие колонки реально есть в "User"
+    const userCols: Array<{ column_name: string }> = await this.prisma.$queryRawUnsafe(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='User'
+    `);
+    const hasUser = (c: string) => userCols.some(x => x.column_name.toLowerCase() === c.toLowerCase());
+
+    // 4) Проверка уникальности (мягкая — только по существующим колонкам)
+    if (login && hasUser('login')) {
+      const exists = await this.prisma.user.findFirst({ where: { login } as any, select: { id: true } as any });
+      if (exists) throw new BadRequestException({ message: 'login_taken' });
+    }
+    if (email && hasUser('email')) {
+      const exists = await this.prisma.user.findFirst({ where: { email } as any, select: { id: true } as any });
+      if (exists) throw new BadRequestException({ message: 'email_taken' });
+    }
+
+    // 5) Готовим данные User с учётом существующих колонок
+    const passwordHash = await argon2.hash(pwd, { type: argon2.argon2id });
+    const data: any = {};
+    if (hasUser('login')     && login)   data.login = login;
+    if (hasUser('email')     && email)   data.email = email;
+    if (hasUser('passwordHash'))         data.passwordHash = passwordHash;
+    if (hasUser('firstName'))            data.firstName = first;
+    if (hasUser('lastName'))             data.lastName = last;
+    if (hasUser('phone'))                data.phone = phone;
+    if (hasUser('role'))                 data.role = 'student';
+    if (hasUser('balance'))              data.balance = 0; // копейки
+
+    // 6) Создаём User
+    const user = await this.prisma.user.create({ data } as any);
+
+    // 7) Создаём StudentProfile (минимум userId) — безопасно, через raw SQL
+    await this.prisma.$executeRawUnsafe(
+      `
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.tables
+          WHERE table_schema='public' AND table_name='StudentProfile'
+        ) THEN
+          INSERT INTO "StudentProfile" ("userId")
+          VALUES ($1)
+          ON CONFLICT ("userId") DO NOTHING;
+        END IF;
+      END$$;
+      `,
+      user.id,
+    );
+
+    // 8) Автологин — выдаём JWT cookie
+    const token = await this.jwt.signAsync(
+      { sub: user.id, role: user.role || 'student', login: user.login || login || email },
+      { secret: process.env.JWT_SECRET || 'dev', expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
+    );
+    res.cookie('token', token, this.cookieOpts());
+
+    return { ok: true, id: user.id, role: user.role || 'student', login: user.login || login || email };
+  }
+
+  // ---------- LOGIN (как было) ----------
   @Post('login')
   async login(@Body() body: any, @Res({ passthrough: true }) res: Response) {
     // Принимаем JSON и x-www-form-urlencoded; нормализуем поля
@@ -118,6 +201,7 @@ export class AuthController {
     throw new UnauthorizedException('invalid_credentials');
   }
 
+  // ---------- ME (как было) ----------
   @Get('me')
   async me(@Req() req: Request) {
     try {
