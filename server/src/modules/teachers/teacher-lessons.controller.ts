@@ -1,7 +1,6 @@
-
 import { BadRequestException, Body, Controller, Post, Req } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { isP2021, isP2022 } from 'src/common/prisma.util';
+import { PrismaService } from '../../prisma/prisma.service';
+import { isP2021, isP2022 } from '../../common/prisma.util';
 
 @Controller('teacher/me/lessons')
 export class TeacherLessonsController {
@@ -9,7 +8,7 @@ export class TeacherLessonsController {
 
   @Post()
   async create(@Req() req: any, @Body() dto: any) {
-    // --- FIX: локальные переменные для проверки баланса/цены ---
+    // --- Проверка баланса до создания урока ---
     const priceMinor: number | null =
       Number.isFinite(Number(dto?.price)) ? Math.trunc(Number(dto.price)) : null;
 
@@ -39,9 +38,9 @@ export class TeacherLessonsController {
         throw new BadRequestException({ message: 'insufficient_funds' });
       }
     }
-    // --- /FIX ---
+    // --- /проверка баланса ---
 
-    // TODO: ваши проверки пересечений по времени остаются здесь
+    // TODO: здесь остаются ваши проверки пересечений по времени и пр.
 
     // Безопасное создание: сначала пробуем с price, если колонки нет — без неё
     try {
@@ -57,6 +56,7 @@ export class TeacherLessonsController {
       });
     } catch (e) {
       if (isP2021(e) || isP2022(e)) {
+        // Повтор без поля price (если колонки нет)
         return await this.prisma.lesson.create({
           data: {
             teacherId: req?.user?.id,

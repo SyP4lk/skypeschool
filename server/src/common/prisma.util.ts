@@ -1,4 +1,3 @@
-
 import { Prisma } from '@prisma/client';
 
 export function isP2022(e: unknown): boolean {

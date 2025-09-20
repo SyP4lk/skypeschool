@@ -1,4 +1,3 @@
-
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
@@ -8,20 +7,19 @@ import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-option
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { cors: false });
 
-  // Express instance (for trust proxy & health)
+  // Express instance (для trust proxy и health)
   const expressApp = app.getHttpAdapter().getInstance();
-
-  // Required for Secure cookies behind Render/Cloudflare proxies
+  // Secure-cookie за прокси Render/Cloudflare
   expressApp.set('trust proxy', 1);
 
-  // Global API prefix
+  // Глобальный префикс /api
   app.setGlobalPrefix('api');
 
-  // Bodies: json + urlencoded (login/register without preflight)
+  // Тела: json + urlencoded (для логина/регистрации без preflight)
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
 
-  // Cookies
+  // Куки
   app.use(cookieParser());
 
   // CORS
@@ -32,7 +30,7 @@ async function bootstrap() {
 
   const corsOptions: CorsOptions = {
     origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
-      if (!origin) return cb(null, true);
+      if (!origin) return cb(null, true);                 // SSR/инструменты без Origin
       if (allowed.includes(origin)) return cb(null, true);
       return cb(new Error('Not allowed by CORS'), false);
     },
@@ -43,7 +41,7 @@ async function bootstrap() {
   };
   app.enableCors(corsOptions);
 
-  // Simple health endpoint for warm-up
+  // Быстрый health для прогрева
   expressApp.get('/api/health', (_req: any, res: any) => res.status(200).send('ok'));
 
   const port = process.env.PORT || 3001;
