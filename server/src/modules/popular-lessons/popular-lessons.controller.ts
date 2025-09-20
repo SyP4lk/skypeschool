@@ -6,7 +6,6 @@ import { PrismaService } from '../../prisma.service';
 export class PopularLessonsController {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Public list for homepage
   @Get('public/popular-lessons')
   async listPublic(@Query('limit') limit = '6') {
     const items = await this.prisma.popularLesson.findMany({
@@ -18,7 +17,6 @@ export class PopularLessonsController {
     return { items };
   }
 
-  // Admin CRUD
   @Get('admin/popular-lessons')
   async listAdmin() {
     const items = await this.prisma.popularLesson.findMany({

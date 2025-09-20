@@ -23,7 +23,6 @@ export default function PopularLessonsAdminPage() {
     setSubjects(subj.items || subj || []);
     setLoading(false);
   }
-
   useEffect(() => { load(); }, []);
 
   async function add() {
@@ -37,7 +36,6 @@ export default function PopularLessonsAdminPage() {
     setImage(''); setSubject(''); setSort(0); setActive(true);
     await load();
   }
-
   async function del(id: string) {
     await fetch(`${API}/admin/popular-lessons/${id}`, { method: 'DELETE', credentials: 'include' });
     await load();
