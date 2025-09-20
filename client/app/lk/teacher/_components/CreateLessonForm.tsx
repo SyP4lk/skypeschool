@@ -62,10 +62,10 @@ export default function CreateLessonForm() {
         comment: note || undefined,
       };
       await api('/teacher/me/lessons', { method: 'POST', body: JSON.stringify(payload) });
-      setMsg('Урок назначен');
+      setMsg('Урок назначен'); toast({ type:'success', message:'Урок назначен' });
       setStudentId(''); setSubjectId(''); setStartsAt(''); setDuration(''); setPrice(''); setNote('');
     } catch (e:any) {
-      setErr(e?.message || 'Ошибка'); toast({ type:'error', message: e?.message || 'Ошибка' });
+      const m = e?.message || 'Ошибка'; setErr(m); toast({ type:'error', message: m === 'insufficient_funds' ? 'Недостаточно средств у ученика' : m });
     }
   }
 

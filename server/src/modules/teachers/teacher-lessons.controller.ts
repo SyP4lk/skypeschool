@@ -81,6 +81,23 @@ export class TeacherLessonsController {
     const student = await this.prisma.user.findUnique({ where: { id: body.studentId } });
     if (!student || student.role !== 'student') throw new BadRequestException('student not found');
 
+    
+    // Проверка баланса студента до создания урока
+    // Пытаемся взять balance из User, если нет колонки — из StudentProfile; если нигде нет — считаем 0
+    let studentBalance: number = Number((student as any)?.balance ?? 0);
+    try {
+      if (typeof studentBalance !== 'number') studentBalance = 0;
+    } catch {}
+    if (!studentBalance || studentBalance < priceMinor) {
+      try {
+        const sp = await (this.prisma as any).studentProfile?.findUnique?.({ where: { userId: student.id }, select: { balance: true } });
+        if (sp && typeof sp.balance === 'number') studentBalance = Number(sp.balance);
+      } catch {}
+    }
+    if (studentBalance < priceMinor) {
+      throw new BadRequestException({ message: 'insufficient_funds' });
+    }
+
     const end = new Date(startsAt.getTime() + Number(body.durationMin) * 60000);
 
     const future = await (this.prisma as any).lesson.findMany({
@@ -96,36 +113,13 @@ export class TeacherLessonsController {
     });
     if (overlap) throw new BadRequestException('time overlap');
 
-    
-    // Проверка достаточности баланса студента (в копейках)
-    try {
-      // Сначала пробуем поле balance на User
-      const s = await (this.prisma as any).user.findUnique({ where: { id: body.studentId }, select: { balance: true, role: true } });
-      const bal = (s && typeof s.balance === 'number') ? s.balance : null;
-      const enough = bal != null ? (priceMinor <= bal) : null;
-      if (enough === false) throw new BadRequestException({ message: 'insufficient_funds' });
-
-      if (enough === null) {
-        // Пытаемся из StudentProfile
-        try {
-          const sp = await (this.prisma as any).studentProfile.findUnique({ where: { userId: body.studentId }, select: { balance: true } });
-          const bal2 = (sp && typeof sp.balance === 'number') ? sp.balance : 0;
-          if (bal2 < priceMinor) throw new BadRequestException({ message: 'insufficient_funds' });
-        } catch { /* нет таблицы/колонки — трактуем как 0 и не даём создать */ }
-      }
-    } catch (e:any) {
-      if (String(e?.message || e?.response?.message || '')?.includes('insufficient_funds')) throw e;
-      // если нет колонок (P2022/P2021) — трактуем как нет денег
-      throw new BadRequestException({ message: 'insufficient_funds' });
-    }
-
-const data: any = {
+    const data: any = {
       teacherId,
       studentId: body.studentId,
       subjectId: body.subjectId,
       startsAt,
       duration: Number(body.durationMin),
-      /* price: */ price: ((): any => { try { return priceMinor; } catch { return undefined as any; } })(),
+      price: priceMinor,
       status: 'planned',
       channel: 'skype',
     };
@@ -195,6 +189,23 @@ const data: any = {
     const startsAt = new Date(body.startsAt);
     if (isNaN(startsAt.getTime())) throw new BadRequestException('startsAt invalid');
     const duration = Number(body.durationMin ?? lesson.duration ?? 0);
+    
+    // Проверка баланса студента до создания урока
+    // Пытаемся взять balance из User, если нет колонки — из StudentProfile; если нигде нет — считаем 0
+    let studentBalance: number = Number((student as any)?.balance ?? 0);
+    try {
+      if (typeof studentBalance !== 'number') studentBalance = 0;
+    } catch {}
+    if (!studentBalance || studentBalance < priceMinor) {
+      try {
+        const sp = await (this.prisma as any).studentProfile?.findUnique?.({ where: { userId: student.id }, select: { balance: true } });
+        if (sp && typeof sp.balance === 'number') studentBalance = Number(sp.balance);
+      } catch {}
+    }
+    if (studentBalance < priceMinor) {
+      throw new BadRequestException({ message: 'insufficient_funds' });
+    }
+
     const end = new Date(startsAt.getTime() + duration * 60000);
 
     const neighbors = await (this.prisma as any).lesson.findMany({

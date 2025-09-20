@@ -14,6 +14,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Request, Response } from 'express';
 import type { CookieOptions } from 'express-serve-static-core';
 import * as argon2 from 'argon2';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma.service';
 
 function parseDurationMs(input: string | undefined, fallbackMs: number): number {
@@ -59,7 +60,21 @@ export class AuthController {
     return opts;
   }
 
-  @Post('register')
+  
+  private async verifyPassword(hash: string, password: string): Promise<boolean> {
+    try {
+      if (!hash) return false;
+      const h = String(hash);
+      // bcrypt signatures: $2a$ / $2b$ / $2y$
+      if (h.startsWith('$2a$') || h.startsWith('$2b$') || h.startsWith('$2y$')) {
+        try { return await bcrypt.compare(password, h); } catch { /* fallthrough */ }
+      }
+      // argon2
+      try { return await argon2.verify(h, password); } catch { /* fallthrough */ }
+      return false;
+    } catch { return false; }
+  }
+@Post('register')
   async register(
     @Body() body: any,
     @Res({ passthrough: true }) res: Response,
@@ -154,7 +169,7 @@ export class AuthController {
     const hash: string | null = (user as any).passwordHash ?? (user as any).password ?? (user as any).hash ?? null;
     if (!hash) throw new UnauthorizedException('invalid_credentials');
 
-    const ok = await argon2.verify(hash, password);
+    const ok = await this.verifyPassword(hash, password);
     if (!ok) throw new UnauthorizedException('invalid_credentials');
 
     const token = await this.jwt.signAsync(
