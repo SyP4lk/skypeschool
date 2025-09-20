@@ -54,7 +54,6 @@ export class AuthController {
   // ---------- REGISTER ----------
   @Post('register')
   async register(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() raw: any) {
-    // 1) Нормализуем тело: поддержка urlencoded/JSON/без заголовка
     const body: any = (raw && typeof raw === 'object') ? raw : ((req as any).body || {});
     const login  = String(body?.login ?? '').trim();
     const email  = String(body?.email ?? '').trim();
@@ -62,9 +61,8 @@ export class AuthController {
     const first  = String(body?.firstName ?? '').trim();
     const last   = String(body?.lastName ?? '').trim();
     const phone  = String(body?.phone ?? '').replace(/\D+/g, '');
-    // messenger приходит как "telegram:@nick" / "whatsapp:+7900...", в User не пишем
+    // messenger: "telegram:@nick"/"whatsapp:+7900..." — в User не пишем, чтоб не падать на отсутствующей колонке
 
-    // 2) Валидация обязательных полей
     if (!first || !last || !pwd || !phone) {
       throw new BadRequestException({ message: 'required_fields' });
     }
@@ -72,14 +70,12 @@ export class AuthController {
       throw new BadRequestException({ message: 'login_or_email_required' });
     }
 
-    // 3) Узнаём, какие колонки реально есть в "User"
     const userCols: Array<{ column_name: string }> = await this.prisma.$queryRawUnsafe(`
       SELECT column_name FROM information_schema.columns
       WHERE table_schema='public' AND table_name='User'
     `);
     const hasUser = (c: string) => userCols.some(x => x.column_name.toLowerCase() === c.toLowerCase());
 
-    // 4) Проверка уникальности (мягкая — только по существующим колонкам)
     if (login && hasUser('login')) {
       const exists = await this.prisma.user.findFirst({ where: { login } as any, select: { id: true } as any });
       if (exists) throw new BadRequestException({ message: 'login_taken' });
@@ -89,8 +85,8 @@ export class AuthController {
       if (exists) throw new BadRequestException({ message: 'email_taken' });
     }
 
-    // 5) Готовим данные User с учётом существующих колонок
     const passwordHash = await argon2.hash(pwd, { type: argon2.argon2id });
+
     const data: any = {};
     if (hasUser('login')     && login)   data.login = login;
     if (hasUser('email')     && email)   data.email = email;
@@ -99,12 +95,11 @@ export class AuthController {
     if (hasUser('lastName'))             data.lastName = last;
     if (hasUser('phone'))                data.phone = phone;
     if (hasUser('role'))                 data.role = 'student';
-    if (hasUser('balance'))              data.balance = 0; // копейки
+    if (hasUser('balance'))              data.balance = 0;
 
-    // 6) Создаём User
     const user = await this.prisma.user.create({ data } as any);
 
-    // 7) Создаём StudentProfile (минимум userId) — безопасно, через raw SQL
+    // ---- FIX: создаём профиль без ON CONFLICT (безопасно при отсутствии уникального индекса) ----
     await this.prisma.$executeRawUnsafe(
       `
       DO $$
@@ -114,15 +109,16 @@ export class AuthController {
           WHERE table_schema='public' AND table_name='StudentProfile'
         ) THEN
           INSERT INTO "StudentProfile" ("userId")
-          VALUES ($1)
-          ON CONFLICT ("userId") DO NOTHING;
+          SELECT $1
+          WHERE NOT EXISTS (
+            SELECT 1 FROM "StudentProfile" WHERE "userId" = $1
+          );
         END IF;
       END$$;
       `,
       user.id,
     );
 
-    // 8) Автологин — выдаём JWT cookie
     const token = await this.jwt.signAsync(
       { sub: user.id, role: user.role || 'student', login: user.login || login || email },
       { secret: process.env.JWT_SECRET || 'dev', expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
@@ -135,12 +131,10 @@ export class AuthController {
   // ---------- LOGIN (как было) ----------
   @Post('login')
   async login(@Body() body: any, @Res({ passthrough: true }) res: Response) {
-    // Принимаем JSON и x-www-form-urlencoded; нормализуем поля
     const ident = String((body?.loginOrEmail ?? body?.login ?? body?.email ?? '') || '').trim();
     const password = String((body?.password ?? body?.pwd ?? '') || '').trim();
     if (!ident || !password) throw new UnauthorizedException('invalid_credentials');
 
-    // Ищем по login/email/phone; если колонок нет — фолбэк к login
     let user: any = null;
     try {
       user = await this.prisma.user.findFirst({
@@ -160,7 +154,6 @@ export class AuthController {
       }
     }
 
-    // Основная ветка верификации по argon2
     if (user && typeof user.passwordHash === 'string' && user.passwordHash) {
       try {
         const ok = /^\$argon2(id|i|d)\$/.test(user.passwordHash)
@@ -179,7 +172,6 @@ export class AuthController {
       }
     }
 
-    // SELF-HEAL для админа (без Shell)
     const adminLogin = String(process.env.ADMIN_LOGIN || 'admin');
     const adminPass  = String(process.env.ADMIN_INITIAL_PASSWORD || 'Admin12345!');
     if (ident === adminLogin && password === adminPass) {
@@ -214,7 +206,6 @@ export class AuthController {
         secret: process.env.JWT_SECRET || 'dev',
       });
 
-      // Базовые поля
       let user: any = await this.prisma.user.findUnique({
         where: { id: payload?.sub },
         select: {
@@ -225,7 +216,6 @@ export class AuthController {
       });
       if (!user) throw new UnauthorizedException('unauthorized');
 
-      // Опционально подтягиваем email/phone (если колонок нет — просто игнор)
       try {
         const ext = await this.prisma.user.findUnique({
           where: { id: payload?.sub },
