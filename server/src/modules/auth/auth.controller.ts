@@ -1,7 +1,7 @@
 import {
   Body, Controller, Get, Post, Req, Res, UnauthorizedException, BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../prisma.service'; // <-- фикс пути
 import { JwtService } from '@nestjs/jwt';
 import { Response, Request } from 'express';
 import * as argon2 from 'argon2';

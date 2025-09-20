@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Post, Req } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../prisma.service'; // <-- фикс пути
 import { isP2021, isP2022 } from '../../common/prisma.util';
 
 @Controller('teacher/me/lessons')
