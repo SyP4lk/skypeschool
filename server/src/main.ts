@@ -2,55 +2,39 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 import * as express from 'express';
-import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
+import { ALLOWED_ORIGINS } from './config/env';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { cors: false });
+  const app = await NestFactory.create(AppModule);
 
-  // Express instance (для trust proxy и health)
-  const expressApp = app.getHttpAdapter().getInstance();
-  // Secure-cookie за прокси Render/Cloudflare
-  expressApp.set('trust proxy', 1);
+  // Устанавливаем trust proxy через нативный Express-инстанс (типобезопасно для Nest)
+  const adapter = app.getHttpAdapter() as any;
+  const instance: any = adapter?.getInstance ? adapter.getInstance() : adapter;
+  if (instance?.set) {
+    instance.set('trust proxy', 1);
+  }
 
-  // Глобальный префикс /api
+  // CORS для кросс-доменных кук
+  app.enableCors({
+    origin: ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS : true,
+    credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Set-Cookie'],
+    optionsSuccessStatus: 204,
+  });
+
+  // Парсеры тела и cookie (urlencoded нужен для форм без preflight)
+  app.use(cookieParser());
+  app.use(express.json({ limit: '2mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+
+  // Глобальный префикс API
   app.setGlobalPrefix('api');
 
-  // Тела: json + urlencoded (для логина/регистрации без preflight)
-  app.use(express.json({ limit: '1mb' }));
-  app.use(express.urlencoded({ extended: true }));
-
-  // Куки
-  app.use(cookieParser());
-
-  // CORS
-  const allowed = (process.env.ALLOWED_ORIGINS || '')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
-
-  const corsOptions: CorsOptions = {
-    origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
-      if (!origin) return cb(null, true);                 // SSR/инструменты без Origin
-      if (allowed.includes(origin)) return cb(null, true);
-      return cb(new Error('Not allowed by CORS'), false);
-    },
-    credentials: true,
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type, Authorization',
-    exposedHeaders: 'Set-Cookie',
-  };
-  app.enableCors(corsOptions);
-
-  // ---- Будилка Render ----
-  // Корень
-  expressApp.get('/', (_req: any, res: any) => res.status(200).send('ok'));
-  expressApp.head('/', (_req: any, res: any) => res.status(200).end());
-  // Health
-  expressApp.get('/api/health', (_req: any, res: any) => res.status(200).send('ok'));
-  expressApp.head('/api/health', (_req: any, res: any) => res.status(200).end());
-  // ------------------------
-
-  const port = process.env.PORT || 3001;
-  await app.listen(port);
+  const port = Number(process.env.PORT || 3000);
+  await app.listen(port, '0.0.0.0');
+  // eslint-disable-next-line no-console
+  console.log(`[NestApplication] started on http://localhost:${port}`);
 }
 bootstrap();

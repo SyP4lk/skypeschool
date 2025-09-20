@@ -1,8 +1,15 @@
+import { ReactNode } from 'react';
+import { redirect } from 'next/navigation';
+import { ssrApiJson } from '@/lib/ssr';
 
-'use client';
-
-import RoleGate from '../../../shared/auth/RoleGate';
-
-export default function Layout({ children }: { children: React.ReactNode }) {
-  return <RoleGate allowed={['student']}>{children}</RoleGate>;
+export default async function Layout({ children }: { children: ReactNode }) {
+  const me = await ssrApiJson('/auth/me').catch(()=>null);
+  if (!me?.role) redirect('/login');
+  if (String(me.role).toLowerCase() !== 'student') {
+    const r = String(me.role || '').toLowerCase();
+    if (r === 'admin') redirect('/admin');
+    if (r === 'teacher') redirect('/lk/teacher');
+    redirect('/login');
+  }
+  return <>{children}</>;
 }

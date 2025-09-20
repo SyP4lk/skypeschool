@@ -1,5 +1,4 @@
 'use client';
-import { useToast } from '@/shared/ui/Toast';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../_lib/api';
 
@@ -7,7 +6,6 @@ type Subject = { id: string; name: string; price?: number; duration?: number };
 type Student = { id: string; login: string; firstName?: string|null; lastName?: string|null; phone?: string|null; email?: string|null };
 
 export default function CreateLessonForm() {
-  const toast = useToast();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [q, setQ] = useState('');
@@ -62,10 +60,10 @@ export default function CreateLessonForm() {
         comment: note || undefined,
       };
       await api('/teacher/me/lessons', { method: 'POST', body: JSON.stringify(payload) });
-      setMsg('Урок назначен'); toast({ type:'success', message:'Урок назначен' });
+      setMsg('Урок назначен');
       setStudentId(''); setSubjectId(''); setStartsAt(''); setDuration(''); setPrice(''); setNote('');
     } catch (e:any) {
-      const m = e?.message || 'Ошибка'; setErr(m); toast({ type:'error', message: m === 'insufficient_funds' ? 'Недостаточно средств у ученика' : m });
+      setErr(e?.message || 'Ошибка');
     }
   }
 
