@@ -1,7 +1,7 @@
 import {
   Body, Controller, Get, Post, Req, Res, UnauthorizedException, BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../../prisma.service'; // <-- фикс пути
+import { PrismaService } from '../../prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { Response, Request } from 'express';
 import * as argon2 from 'argon2';
@@ -51,7 +51,6 @@ export class AuthController {
     const hash: string = user.passwordHash;
     let ok = false;
     try {
-      // bcrypt: $2a/$2b/$2y...
       if (/^\$2[aby]\$/.test(hash)) {
         ok = await bcrypt.compare(password, hash);
       } else {
@@ -73,7 +72,6 @@ export class AuthController {
 
   @Post('register')
   async register(@Body() body: RegisterBody, @Res({ passthrough: true }) res: Response) {
-    // Обязательные поля
     const firstName = (body.firstName || '').trim();
     const lastName = (body.lastName || '').trim();
     const phoneDigits = String(body.phone || '').replace(/\D+/g, '');
@@ -86,23 +84,23 @@ export class AuthController {
     const email = (body.email || '').trim().toLowerCase();
     const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
 
-    // Создаём максимально совместимо с «дырявой» схемой
     let user: any;
     try {
-      user = await this.prisma.user.create({
-        data: {
-          login,
-          ...(email ? { email } : {}),
-          passwordHash,
-          firstName,
-          lastName,
-          role: 'student',
-          // если есть поле balance на User — запишется; если нет — поймаем P2022 и допишем ниже
-          ...(Number.isInteger(0) ? { balance: 0 as any } : {}),
-          ...(phoneDigits ? { phone: phoneDigits as any } : {}),
-          ...(body.messenger ? { messenger: body.messenger as any } : {}),
-        },
-      });
+      // Собираем createData в any, чтобы не споткнуться об отсутствующие колонки на типах
+      const createData: any = {
+        login,
+        passwordHash,
+        firstName,
+        lastName,
+        role: 'student',
+      };
+      if (email) createData.email = email;
+      // ниже — мягкие поля: если колонок нет, БД/Prisma вернут P2022/P2021, но TS не должен падать
+      createData.balance = 0;
+      createData.phone = phoneDigits;
+      if (body.messenger) createData.messenger = body.messenger;
+
+      user = await this.prisma.user.create({ data: createData as any });
     } catch (e) {
       if (isP2022(e) || isP2021(e)) {
         // fallback: минимальный create
@@ -115,23 +113,18 @@ export class AuthController {
             role: 'student',
           },
         });
-        // Пытаемся дозаписать по одному
-        if (email) {
-          try { await this.prisma.user.update({ where: { id: user.id }, data: { email: email as any } }); } catch {}
-        }
-        if (phoneDigits) {
-          try { await this.prisma.user.update({ where: { id: user.id }, data: { phone: phoneDigits as any } }); } catch {}
-        }
-        try { await this.prisma.user.update({ where: { id: user.id }, data: { balance: 0 as any } }); } catch {}
-        if (body.messenger) {
-          try { await this.prisma.user.update({ where: { id: user.id }, data: { messenger: body.messenger as any } }); } catch {}
-        }
+        // дозапись одним апдейтом, data через any
+        const updateData: any = {};
+        if (email) updateData.email = email;
+        updateData.balance = 0;
+        updateData.phone = phoneDigits;
+        if (body.messenger) updateData.messenger = body.messenger;
+        try { await this.prisma.user.update({ where: { id: user.id }, data: updateData as any }); } catch {}
       } else {
         throw e;
       }
     }
 
-    // Авто-логин
     const token = await this.jwt.signAsync({ sub: user.id, role: user.role }, {
       expiresIn: process.env.JWT_EXPIRES_IN || '7d',
       secret: process.env.JWT_SECRET!,
@@ -142,7 +135,6 @@ export class AuthController {
 
   @Get('me')
   async me(@Req() req: Request) {
-    // Если нет guard — пытаемся из cookie
     const auth = (req as any)['auth'] as { userId?: string } | undefined;
     const userId = auth?.userId;
     if (!userId) {
@@ -163,8 +155,6 @@ export class AuthController {
     return this.publicUser(user);
   }
 
-  // ---- helpers ----
-
   private setAuthCookie(res: Response, token: string) {
     const isProd = (process.env.NODE_ENV || '').toLowerCase() === 'production';
     res.cookie('token', token, {
@@ -182,13 +172,11 @@ export class AuthController {
   }
 
   private async findUserByIdentifierSafe(identifier: string) {
-    // 1) login
     try {
       const u = await this.prisma.user.findFirst({ where: { login: identifier } });
       if (u) return u;
     } catch {}
 
-    // 2) email
     if (identifier.includes('@')) {
       try {
         const u = await this.prisma.user.findFirst({ where: { email: identifier as any } });
@@ -196,7 +184,6 @@ export class AuthController {
       } catch (e) { if (!(isP2022(e) || isP2021(e))) throw e; }
     }
 
-    // 3) phone
     const digits = identifier.replace(/\D+/g, '');
     if (digits.length >= 6) {
       try {
@@ -205,11 +192,6 @@ export class AuthController {
       } catch (e) { if (!(isP2022(e) || isP2021(e))) throw e; }
     }
 
-    // 4) fallback login
-    try {
-      return await this.prisma.user.findFirst({ where: { login: identifier } });
-    } catch {
-      return null;
-    }
+    try { return await this.prisma.user.findFirst({ where: { login: identifier } }); } catch { return null; }
   }
 }
