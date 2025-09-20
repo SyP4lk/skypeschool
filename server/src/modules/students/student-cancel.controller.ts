@@ -14,8 +14,7 @@ export class StudentCancelController {
     const lesson = await this.prisma.lesson.findUnique({ where: { id } } as any);
     if (!lesson || lesson.studentId !== userId) throw new NotFoundException();
 
-    const starts = new Date(lesson.startsAt);
-    const diffHrs = (starts.getTime() - Date.now()) / 3_600_000;
+    const diffHrs = (new Date(lesson.startsAt).getTime() - Date.now()) / 3_600_000;
     if (diffHrs < 8) throw new BadRequestException({ message: 'too_late_to_cancel' });
 
     const updated = await this.prisma.lesson.update({ where: { id }, data: { status: 'canceled_by_student' } } as any);

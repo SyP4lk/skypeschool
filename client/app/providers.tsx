@@ -2,9 +2,7 @@
 'use client';
 import { ToastProvider } from '../shared/ui/Toast';
 
-function Providers({ children }: { children: React.ReactNode }) {
+export default function Providers({ children }: { children: React.ReactNode }) {
   return <ToastProvider>{children}</ToastProvider>;
 }
-
-export default Providers;
-export { Providers };
+export { ToastProvider as Providers } from '../shared/ui/Toast';

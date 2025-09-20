@@ -3,8 +3,8 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-type ToastItem = { id: number; type: 'success'|'error'|'info'; message: string; };
-type ToastCtx = { toast: (arg: { type: ToastItem['type']; message: string }) => void; };
+type ToastItem = { id: number; type: 'success'|'error'|'info'; message: string };
+type ToastCtx  = { toast: (v: { type: ToastItem['type']; message: string }) => void };
 
 const Ctx = createContext<ToastCtx | null>(null);
 
@@ -12,8 +12,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [items, setItems] = useState<ToastItem[]>([]);
   const toast = useCallback(({ type, message }: { type: ToastItem['type']; message: string }) => {
     const id = Date.now() + Math.random();
-    setItems(prev => [...prev, { id, type, message }]);
-    setTimeout(() => setItems(prev => prev.filter(x => x.id !== id)), 4000);
+    setItems((a) => [...a, { id, type, message }]);
+    setTimeout(() => setItems((a) => a.filter(x => x.id !== id)), 4000);
   }, []);
   const value = useMemo(() => ({ toast }), [toast]);
 
@@ -23,8 +23,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       {typeof document !== 'undefined' && createPortal(
         <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
           {items.map(i => (
-            <div key={i.id} className="rounded-2xl shadow px-4 py-3 min-w-[260px] bg-white/90 backdrop-blur border">
-              <div className="text-sm font-medium">
+            <div key={i.id} className="rounded-2xl shadow px-4 py-3 min-w-[260px] bg-white border">
+              <div className="text-sm font-semibold">
                 {i.type === 'success' ? 'Готово' : i.type === 'error' ? 'Ошибка' : 'Сообщение'}
               </div>
               <div className="text-sm opacity-80">{i.message}</div>
