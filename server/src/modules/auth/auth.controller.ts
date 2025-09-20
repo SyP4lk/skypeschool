@@ -51,7 +51,7 @@ export class AuthController {
     return { ...this.cookieBase(), maxAge };
   }
 
-  // ---------- REGISTER ----------
+  // ---------- REGISTER (устойчивый) ----------
   @Post('register')
   async register(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() raw: any) {
     const body: any = (raw && typeof raw === 'object') ? raw : ((req as any).body || {});
@@ -61,7 +61,6 @@ export class AuthController {
     const first  = String(body?.firstName ?? '').trim();
     const last   = String(body?.lastName ?? '').trim();
     const phone  = String(body?.phone ?? '').replace(/\D+/g, '');
-    // messenger: "telegram:@nick"/"whatsapp:+7900..." — в User не пишем, чтоб не падать на отсутствующей колонке
 
     if (!first || !last || !pwd || !phone) {
       throw new BadRequestException({ message: 'required_fields' });
@@ -70,12 +69,14 @@ export class AuthController {
       throw new BadRequestException({ message: 'login_or_email_required' });
     }
 
+    // какие колонки есть в User (чтобы не падать на отсутствующих)
     const userCols: Array<{ column_name: string }> = await this.prisma.$queryRawUnsafe(`
       SELECT column_name FROM information_schema.columns
       WHERE table_schema='public' AND table_name='User'
     `);
     const hasUser = (c: string) => userCols.some(x => x.column_name.toLowerCase() === c.toLowerCase());
 
+    // мягкая проверка уникальности
     if (login && hasUser('login')) {
       const exists = await this.prisma.user.findFirst({ where: { login } as any, select: { id: true } as any });
       if (exists) throw new BadRequestException({ message: 'login_taken' });
@@ -88,47 +89,57 @@ export class AuthController {
     const passwordHash = await argon2.hash(pwd, { type: argon2.argon2id });
 
     const data: any = {};
-    if (hasUser('login')     && login)   data.login = login;
-    if (hasUser('email')     && email)   data.email = email;
-    if (hasUser('passwordHash'))         data.passwordHash = passwordHash;
-    if (hasUser('firstName'))            data.firstName = first;
-    if (hasUser('lastName'))             data.lastName = last;
-    if (hasUser('phone'))                data.phone = phone;
-    if (hasUser('role'))                 data.role = 'student';
-    if (hasUser('balance'))              data.balance = 0;
+    if (hasUser('login')       && login)   data.login = login;
+    if (hasUser('email')       && email)   data.email = email;
+    if (hasUser('passwordHash'))           data.passwordHash = passwordHash;
+    if (hasUser('firstName'))              data.firstName = first;
+    if (hasUser('lastName'))               data.lastName = last;
+    if (hasUser('phone'))                  data.phone = phone;
+    if (hasUser('role'))                   data.role = 'student';
+    if (hasUser('balance'))                data.balance = 0;
 
     const user = await this.prisma.user.create({ data } as any);
 
-    // ---- FIX: создаём профиль без ON CONFLICT (безопасно при отсутствии уникального индекса) ----
-    await this.prisma.$executeRawUnsafe(
-      `
-      DO $$
-      BEGIN
-        IF EXISTS (
-          SELECT 1 FROM information_schema.tables
-          WHERE table_schema='public' AND table_name='StudentProfile'
-        ) THEN
-          INSERT INTO "StudentProfile" ("userId")
-          SELECT $1
-          WHERE NOT EXISTS (
-            SELECT 1 FROM "StudentProfile" WHERE "userId" = $1
-          );
-        END IF;
-      END$$;
-      `,
-      user.id,
-    );
+    // Создание StudentProfile — НЕ критично. Любую ошибку гасим и логируем.
+    try {
+      await this.prisma.$executeRawUnsafe(
+        `
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema='public' AND table_name='StudentProfile'
+          ) THEN
+            INSERT INTO "StudentProfile" ("userId")
+            SELECT $1
+            WHERE NOT EXISTS (SELECT 1 FROM "StudentProfile" WHERE "userId" = $1);
+          END IF;
+        END$$;
+        `,
+        user.id,
+      );
+    } catch (e: any) {
+      this.log.warn(`register: StudentProfile create skipped: ${e?.message || e}`);
+      // не бросаем — регистрация уже успешна
+    }
 
-    const token = await this.jwt.signAsync(
-      { sub: user.id, role: user.role || 'student', login: user.login || login || email },
-      { secret: process.env.JWT_SECRET || 'dev', expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
-    );
-    res.cookie('token', token, this.cookieOpts());
+    // Ставим cookie — в случае ошибки не роняем запрос
+    try {
+      const token = await this.jwt.signAsync(
+        { sub: user.id, role: user.role || 'student', login: user.login || login || email },
+        { secret: process.env.JWT_SECRET || 'dev', expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
+      );
+      res.cookie('token', token, this.cookieOpts());
+    } catch (e: any) {
+      this.log.warn(`register: set cookie failed: ${e?.message || e}`);
+      // ок, пользователь всё равно создан — фронт может сразу сделать /auth/login
+    }
 
+    // Возвращаем успех ВСЕГДА (после создания User)
     return { ok: true, id: user.id, role: user.role || 'student', login: user.login || login || email };
   }
 
-  // ---------- LOGIN (как было) ----------
+  // ---------- LOGIN (без изменений) ----------
   @Post('login')
   async login(@Body() body: any, @Res({ passthrough: true }) res: Response) {
     const ident = String((body?.loginOrEmail ?? body?.login ?? body?.email ?? '') || '').trim();
@@ -193,7 +204,7 @@ export class AuthController {
     throw new UnauthorizedException('invalid_credentials');
   }
 
-  // ---------- ME (как было) ----------
+  // ---------- ME (без изменений) ----------
   @Get('me')
   async me(@Req() req: Request) {
     try {
