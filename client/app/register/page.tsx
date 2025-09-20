@@ -1,72 +1,78 @@
+
 'use client';
 import { useState } from 'react';
-import Link from 'next/link';
 
-const API_BASE = '';
-
-async function api(path: string, init: RequestInit = {}) {
-  const res = await fetch(`${API_BASE}/api${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init.headers || {}),
-    },
-  });
-  const txt = await res.text().catch(()=>'');
-  let data: any = null;
-  try { data = txt ? JSON.parse(txt) : null; } catch {}
-  if (!res.ok) throw new Error((data && (data.message || data.error)) || txt || `HTTP ${res.status}`);
-  return data;
-}
+const API = (process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/$/, '');
 
 export default function RegisterPage() {
+  const [firstName, setFirst] = useState('');
+  const [lastName, setLast] = useState('');
   const [login, setLogin] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
+  const [messenger, setMessenger] = useState('telegram');
+  const [messengerContact, setMessengerContact] = useState('');
   const [err, setErr] = useState<string|null>(null);
-  const [msg, setMsg] = useState<string|null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const onSubmit = async (e: any) => {
+  function valid() {
+    return firstName && lastName && password && phone && messenger && messengerContact && (login || email);
+  }
+
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setErr(null); setMsg(null);
+    setErr(null);
+    if (!valid()) { setErr('Заполните все поля. Укажите логин или email.'); return; }
+    setLoading(true);
+    const form = new URLSearchParams();
+    if (login) form.set('login', login);
+    if (email) form.set('email', email);
+    form.set('password', password);
+    form.set('firstName', firstName);
+    form.set('lastName', lastName);
+    form.set('phone', phone.replace(/\D+/g, ''));
+    form.set('messenger', `${messenger}:${messengerContact}`);
     try {
-      if (!login || !password || !phone || !email) throw new Error('Заполните все поля');
-      await api('/auth/register', { method: 'POST', body: JSON.stringify({ login, password, phone, email }) });
-      setMsg('Регистрация успешна, можно войти');
-      setLogin(''); setPassword(''); setPhone(''); setEmail('');
-    } catch (e:any) {
-      setErr(e?.message || 'Ошибка регистрации');
+      const r = await fetch(`${API}/auth/register`, { method: 'POST', body: form, credentials: 'include' });
+      if (!r.ok) throw new Error('register_failed');
+      location.href = '/lk/student';
+    } catch {
+      setErr('Регистрация не удалась. Попробуйте позже.');
+    } finally {
+      setLoading(false);
     }
-  };
+  }
 
   return (
-    <div className="max-w-md mx-auto py-10">
-      <h1 className="text-xl font-semibold mb-4">Регистрация ученика</h1>
-      {err && <div className="mb-3 px-3 py-2 rounded border border-rose-300 bg-rose-50 text-rose-800">{err}</div>}
-      {msg && <div className="mb-3 px-3 py-2 rounded border border-green-300 bg-green-50 text-green-800">{msg}</div>}
-      <form className="space-y-3" onSubmit={onSubmit}>
-        <div>
-          <label className="text-sm block mb-1">Логин</label>
-          <input className="w-full rounded border px-3 py-2" value={login} onChange={e=>setLogin(e.target.value)} required />
+    <div className="max-w-md mx-auto p-6">
+      <h1 className="text-xl font-semibold mb-4">Регистрация</h1>
+      <form onSubmit={onSubmit} className="flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-2">
+          <input required placeholder="Имя" className="border rounded p-2" value={firstName} onChange={e=>setFirst(e.target.value)} />
+          <input required placeholder="Фамилия" className="border rounded p-2" value={lastName} onChange={e=>setLast(e.target.value)} />
         </div>
-        <div>
-          <label className="text-sm block mb-1">Пароль</label>
-          <input type="password" className="w-full rounded border px-3 py-2" value={password} onChange={e=>setPassword(e.target.value)} required />
+        <div className="grid grid-cols-2 gap-2">
+          <input placeholder="Логин" className="border rounded p-2" value={login} onChange={e=>setLogin(e.target.value)} />
+          <input placeholder="Email" type="email" className="border rounded p-2" value={email} onChange={e=>setEmail(e.target.value)} />
         </div>
-        <div>
-          <label className="text-sm block mb-1">Телефон</label>
-          <input className="w-full rounded border px-3 py-2" value={phone} onChange={e=>setPhone(e.target.value)} required />
+        <input required type="password" placeholder="Пароль" className="border rounded p-2" value={password} onChange={e=>setPassword(e.target.value)} />
+        <input required placeholder="Телефон" className="border rounded p-2" value={phone} onChange={e=>setPhone(e.target.value)} />
+        <div className="grid grid-cols-2 gap-2">
+          <select className="border rounded p-2" value={messenger} onChange={e=>setMessenger(e.target.value)}>
+            <option value="telegram">Telegram</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="viber">Viber</option>
+            <option value="vk">VK</option>
+          </select>
+          <input required placeholder="Контакт в мессенджере (@nick / +7900...)" className="border rounded p-2"
+                 value={messengerContact} onChange={e=>setMessengerContact(e.target.value)} />
         </div>
-        <div>
-          <label className="text-sm block mb-1">Email</label>
-          <input type="email" className="w-full rounded border px-3 py-2" value={email} onChange={e=>setEmail(e.target.value)} required />
-        </div>
-        <button className="px-4 py-2 rounded border bg-blue-600 text-white">Зарегистрироваться</button>
+        <button disabled={loading} className="rounded bg-black text-white py-2">
+          {loading ? 'Создаём…' : 'Зарегистрироваться'}
+        </button>
+        {err && <div className="text-sm text-red-600">{err}</div>}
       </form>
-      <div className="mt-4 text-sm">
-        Уже есть аккаунт? <Link href="/login" className="text-blue-600 hover:underline">Войти</Link>
-      </div>
     </div>
   );
 }

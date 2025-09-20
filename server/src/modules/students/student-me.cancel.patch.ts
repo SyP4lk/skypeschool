@@ -1,0 +1,16 @@
+
+// Add to StudentMeController
+@Post('me/lessons/:id/cancel')
+async cancel(@Req() req: any, @Param('id') id: string) {
+  const userId = req.user?.id;
+  const lesson = await this.prisma.lesson.findUnique({ where: { id } } as any);
+  if (!lesson || lesson.studentId !== userId) throw new NotFoundException();
+  const starts = new Date(lesson.startsAt);
+  const now = new Date();
+  const diffHrs = (starts.getTime() - now.getTime()) / 3_600_000;
+  if (diffHrs < 8) {
+    throw new BadRequestException({ message: 'too_late_to_cancel' });
+  }
+  const updated = await this.prisma.lesson.update({ where: { id }, data: { status: 'canceled_by_student' } } as any);
+  return { lesson: updated };
+}

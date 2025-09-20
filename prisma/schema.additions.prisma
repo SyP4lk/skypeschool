@@ -1,0 +1,11 @@
+
+model PopularLesson {
+  id         String   @id @default(cuid())
+  imageUrl   String
+  subjectId  String
+  subject    Subject? @relation(fields: [subjectId], references: [id])
+  isActive   Boolean  @default(true)
+  sort       Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
