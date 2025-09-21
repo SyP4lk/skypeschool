@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from './_lib/api';
 import { NotifyCenter } from '@/shared/ui/NotifyCenter';
 import { notify, toHuman } from '@/shared/ui/notify';
@@ -36,6 +36,8 @@ const teacherLabel = (t?: Lesson['teacher']) => {
   const fio = [t.lastName, t.firstName].filter(Boolean).join(' ');
   return [t.login, fio].filter(Boolean).join(' — ');
 };
+
+const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000;
 
 export default function StudentLK() {
   const [balance, setBalance] = useState<number>(0);
@@ -77,6 +79,20 @@ export default function StudentLK() {
     })();
   }, []);
 
+  function canCancel(startsAt: string) {
+    try { return (new Date(startsAt).getTime() - Date.now()) >= EIGHT_HOURS_MS; } catch { return false; }
+  }
+
+  async function cancelLesson(id: string) {
+    try {
+      await api(`/student/me/lessons/${id}/cancel`, { method: 'POST' });
+      notify('Урок отменён', 'success');
+      await loadLessons();
+    } catch (e:any) {
+      notify(toHuman(String(e?.message || '')), 'error');
+    }
+  }
+
   return (
     <div className="max-w-3xl mx-auto py-6 space-y-6">
       <section className="rounded-xl border p-4">
@@ -101,7 +117,18 @@ export default function StudentLK() {
                 <div className="space-y-1">
                   <div className="font-medium">{l.subjectName || 'Предмет'}</div>
                   <div className="text-sm text-gray-600">{teacherLabel(l.teacher)}</div>
-                  <div className="text-sm">{fmtDate.format(new Date(l.startsAt))}</div>
+                  <div className="text-sm">
+                    {fmtDate.format(new Date(l.startsAt))}
+                    {' '}
+                    {canCancel(l.startsAt) && (
+                      <button
+                        className="px-2 py-1 rounded border text-xs"
+                        onClick={() => cancelLesson(l.id)}
+                      >
+                        Отменить
+                      </button>
+                    )}
+                  </div>
                   <div className="text-sm">{lDuration(l)} мин · {fmtMoney.format(lPriceRub(l))}</div>
                   {l.comment ? <div className="text-xs text-gray-500">Комментарий: {l.comment}</div> : null}
                 </div>
