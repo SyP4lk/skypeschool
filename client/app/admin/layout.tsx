@@ -96,6 +96,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Link href="/admin/categories">Категории</Link>
           <Link href="/admin/finance">Финансы</Link>
           <Link href="/admin/articles">Статьи</Link>
+          <Link href="/admin/popular-lessons">Популярные уроки</Link>
           <Link href="/admin/trials">Заявки</Link>
           <Link href="/admin/support">Поддержка</Link>
         </nav>

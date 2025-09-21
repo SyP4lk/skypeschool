@@ -32,18 +32,7 @@ type Category = {
   alt: string;
 };
 
-const categories: Category[] = [
-  { title: 'Английский общий курс',  icon: '/icons/thumbs/language-learning_7231672.webp', alt: 'Английский общий курс' },
-  { title: 'Высшая математика',      icon: '/icons/mathematics.webp',        alt: 'Высшая математика' },
-  { title: 'Русский язык ЕГЭ',       icon: '/icons/thumbs/premiere-rush_15584886.webp',    alt: 'Русский язык ЕГЭ' },
-  { title: 'Физика для школьников',  icon: '/icons/thumbs/fizika_j5g6lotv576x_512.webp',   alt: 'Физика для школьников' },
-  { title: 'Подготовка к TOEFL',     icon: '/icons/thumbs/toefl.webp',                      alt: 'Подготовка к TOEFL' },
-  { title: 'Шахматы детям',          icon: '/icons/thumbs/strategiya_dq10c445olj4_512.webp',alt: 'Шахматы детям' },
-  { title: 'Детский логопед',        icon: '/icons/thumbs/logopediya_032nkwn8jwck_512.webp',alt: 'Детский логопед' },
-  { title: 'Немецкий язык',          icon: '/icons/thumbs/izucite-koncepciu-onlain-obrazovania-nemeckogo-azyka.jpg', alt: 'Рисунок и живопись' },
-  { title: 'Китайский язык',         icon: '/icons/thumbs/kitaj_8bfrwpul7o2d_512.webp',     alt: 'Китайский язык' },
-  { title: 'Информатика ЕГЭ ОГЭ',    icon: '/icons/thumbs/informatika_0c2itb0a3w01_512.webp',alt: 'Информатика ЕГЭ ОГЭ' },
-];
+
 
 const features = [
   {
@@ -123,23 +112,27 @@ export default function HomePage() {
   
   // Источник карточек: по умолчанию статический массив `categories`,
   // но если админ наполнил JSON, подменяем данные динамическими.
-  const [dynCategories, setDynCategories] = useState<Category[]>(categories);
-  useEffect(() => {
-    let alive = true;
-    fetch('/data/popular-lessons.json', { cache: 'no-store' })
-      .then(r => r.json())
-      .then((j) => {
-        const arr = Array.isArray(j) ? j : (Array.isArray((j as any)?.items) ? (j as any).items : []);
-        const mapped = arr.map((x: any) => ({
-          title: String(x.title || '').trim(),
-          alt: String(x.alt || x.title || '').trim(),
-          icon: String(x.icon || ''),
-        })).filter((x: any) => x.title && x.icon);
-        if (alive && mapped.length > 0) setDynCategories(mapped);
-      })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, []);
+const [dynCategories, setDynCategories] = useState<Category[]>([]);
+const [hasLoaded, setHasLoaded] = useState(false);
+
+useEffect(() => {
+  let alive = true;
+  fetch('/data/popular-lessons.json', { cache: 'no-store' })
+    .then(r => r.json())
+    .then((j) => {
+      if (!alive) return;
+      const arr = Array.isArray(j) ? j : (Array.isArray((j as any)?.items) ? (j as any).items : []);
+      const mapped = arr.map((x: any) => ({
+        title: String(x.title || '').trim(),
+        alt: String(x.alt || x.title || '').trim(),
+        icon: String(x.icon || ''),
+      })).filter((x: any) => x.title && x.icon);
+      setDynCategories(mapped);     // если пусто — оставим []
+      setHasLoaded(true);
+    })
+    .catch(() => { setHasLoaded(true); });
+  return () => { alive = false; };
+}, []);
 return (
     <main>
       {/* Hero */}
@@ -213,86 +206,85 @@ return (
 
 
 {/* Categories (lazy + particles background) */}
-<section className={styles.categories} >
-<MouseRepelField
-        asBackground
-        maxCount={150}              // верхняя граница; реально масштабируется от площади
-        maxSpeed={0.75}
-        linkDistance={130}
-        lineWidth={1}
-        lineColor="rgba(99,102,241,0.45)"  // indigo-500 @ 0.45
-        pointSize={2}
-        pointColor="rgba(59,130,246,0.9)"  // blue-500
-        mouseRadius={130}
-        mousePower={900}
-        mouseMode="repel"          // 'repel' или 'attract'
-      />
-  <div className="container">
-    
-    <h2 data-aos="fade-up">Самые популярные уроки</h2>
-
-    {/* wrapper с position:relative — якорь для фона */}
-    <LazySection
-      rootMargin="300px 0px"
-      fallbackMinHeight={520}
-      className="relative overflow-hidden rounded-2xl mt-4"
-    >
-      
-  {/* Фон: частицы, не влияют на лейаут */}
-      
-      {/* Контент поверх фона */}
-      <div className={`relative z-10 grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 ${styles.cvAuto}`}>
-        {dynCategories.map((c) => (
-          <Card
-  key={c.title}
-  as={Link}
-  prefetch={false}
-  href={`/teachers?q=${encodeURIComponent(c.title)}`}
-  isPressable
-  isFooterBlurred
-  radius="none"                            // управление радиусом берём на себя
-  className="relative h-[260px] border-none rounded-2xl overflow-hidden shadow-sm"
->
-  <div className="absolute inset-0 z-0">
-    <Image
-      alt={c.alt}
-      src={c.icon}
-      fill
-      decoding="async"
-      loading="lazy"
-      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-      className="object-cover"
+{hasLoaded && dynCategories.length > 0 && (
+  <section className={styles.categories}>
+    <MouseRepelField
+      asBackground
+      maxCount={150}
+      maxSpeed={0.75}
+      linkDistance={130}
+      lineWidth={1}
+      lineColor="rgba(99,102,241,0.45)"
+      pointSize={2}
+      pointColor="rgba(59,130,246,0.9)"
+      mouseRadius={130}
+      mousePower={900}
+      mouseMode="repel"
     />
-  </div>
 
-  <CardFooter
-    className="
-      absolute bottom-2 left-2 right-2 z-10
-      rounded-xl border bg-white/80 dark:bg-black/50
-      backdrop-blur-[3px] shadow-small
-      py-1
-      border-white/30 dark:border-white/10
-    "
-  >
-    <p className="text-tiny text-foreground">{c.title}</p>
-    <HButton
-      as="span"
-      className="text-tiny text-foreground/90 bg-black/20 dark:bg-white/15"
-      color="default"
-      radius="lg"
-      size="sm"
-      variant="flat"
-    >
-      Перейти
-    </HButton>
-  </CardFooter>
-</Card>
+    <div className="container">
+      <h2 data-aos="fade-up">Самые популярные уроки</h2>
 
-        ))}
-      </div>
-    </LazySection>
-  </div>
-</section>
+      {/* wrapper с position:relative — якорь для фона */}
+      <LazySection
+        rootMargin="300px 0px"
+        fallbackMinHeight={520}
+        className="relative overflow-hidden rounded-2xl mt-4"
+      >
+        {/* Контент поверх фона */}
+        <div className={`relative z-10 grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 ${styles.cvAuto}`}>
+          {dynCategories.map((c) => (
+            <Card
+              key={c.title}
+              as={Link}
+              prefetch={false}
+              href={`/teachers?q=${encodeURIComponent(c.title)}`}
+              isPressable
+              isFooterBlurred
+              radius="none"
+              className="relative h-[260px] border-none rounded-2xl overflow-hidden shadow-sm"
+            >
+              <div className="absolute inset-0 z-0">
+                <Image
+                  alt={c.alt}
+                  src={c.icon}
+                  fill
+                  decoding="async"
+                  loading="lazy"
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                  className="object-cover"
+                />
+              </div>
+
+              <CardFooter
+                className="
+                  absolute bottom-2 left-2 right-2 z-10
+                  rounded-xl border bg-white/80 dark:bg-black/50
+                  backdrop-blur-[3px] shadow-small
+                  py-1
+                  border-white/30 dark:border-white/10
+                "
+              >
+                <p className="text-tiny text-foreground">{c.title}</p>
+                <HButton
+                  as="span"
+                  className="text-tiny text-foreground/90 bg-black/20 dark:bg-white/15"
+                  color="default"
+                  radius="lg"
+                  size="sm"
+                  variant="flat"
+                >
+                  Перейти
+                </HButton>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      </LazySection>
+    </div>
+  </section>
+)}
+
 
 
       {/* Features */}
