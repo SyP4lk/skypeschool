@@ -1,23 +1,15 @@
 'use client';
-import React, { useEffect } from 'react';
-import { ToastProvider, useToast, installFetchToasts } from '../shared/ui/Toast';
 
-function FetchToastsInstaller() {
-  const toast = useToast();
-  useEffect(() => {
-    installFetchToasts(toast);
-  }, [toast]);
-  return null;
-}
+import React from 'react';
 
+/**
+ * Временный провайдер-болванка: НИЧЕГО не делает, просто рендерит children.
+ * Это исключит любые побочные эффекты и позволит загрузиться ЛК.
+ * Тосты подключим повторно после стабилизации страницы.
+ */
 export default function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <ToastProvider>
-      <FetchToastsInstaller />
-      {children}
-    </ToastProvider>
-  );
+  return <>{children}</>;
 }
 
-// если где-то импортируется именованный Providers — пусть тоже работает
-export { ToastProvider as Providers } from '../shared/ui/Toast';
+// Если где-то ожидается именованный экспорт Providers — оставляем совместимость
+export { default as Providers } from './providers';
