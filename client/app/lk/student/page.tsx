@@ -4,9 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const API = (process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/$/, '');
 
+type RawRole = string | null | undefined;
 type Me = {
   id: string;
-  role: 'student'|'teacher'|'admin';
+  role?: RawRole;
   login?: string|null;
   firstName?: string|null;
 };
@@ -16,10 +17,18 @@ type Lesson = {
   studentId: string;
   teacherId: string;
   startsAt: string;
-  status: 'scheduled'|'done'|'canceled_by_student'|'canceled_by_teacher';
+  status: 'scheduled'|'done'|'canceled_by_student'|'canceled_by_teacher'|string;
   teacher?: { id: string; login?: string|null; firstName?: string|null } | null;
   priceMinor?: number|null;
 };
+
+function normRole(v: RawRole): 'teacher'|'student'|'admin'|'other' {
+  const s = String(v ?? '').trim().toLowerCase();
+  if (['teacher', 'преподаватель', 'teach', 't'].includes(s)) return 'teacher';
+  if (['student', 'ученик', 'stud', 's'].includes(s)) return 'student';
+  if (['admin', 'administrator', 'a'].includes(s)) return 'admin';
+  return 'other';
+}
 
 export default function StudentLK() {
   const [me, setMe] = useState<Me | null>(null);
@@ -41,7 +50,7 @@ export default function StudentLK() {
         if (!r.ok) throw new Error('unauthorized');
         const u: Me = await r.json();
         if (cancelled) return;
-        setMe(u?.role === 'student' ? u : null);
+        setMe(u);
       } catch {
         setMe(null);
       } finally {
@@ -51,8 +60,13 @@ export default function StudentLK() {
     return () => { cancelled = true; };
   }, []);
 
-  // загрузка уроков
+  const role = normRole(me?.role);
+  const isStudent = role === 'student';
+
+  const [busy, setBusy] = useState(false);
+
   const loadLessons = useCallback(async (toPage = page) => {
+    if (!isStudent) { setItems([]); setTotal(0); return; }
     const r = await fetch(`${API}/student/me/lessons?status=upcoming&page=${toPage}&limit=${limit}`, {
       credentials: 'include',
     });
@@ -60,7 +74,7 @@ export default function StudentLK() {
     const j = await r.json();
     setItems(Array.isArray(j?.items) ? j.items : (Array.isArray(j) ? j : []));
     setTotal(typeof j?.total === 'number' ? j.total : (Array.isArray(j) ? j.length : 0));
-  }, [limit, page]);
+  }, [limit, page, isStudent]);
 
   useEffect(() => {
     if (!me?.id) return;
@@ -68,25 +82,30 @@ export default function StudentLK() {
   }, [me?.id, page, loadLessons]);
 
   async function cancelLesson(id: string) {
-    // отмена без Content-Type (urlencoded пустой — чтобы не было preflight)
-    const body = new URLSearchParams();
-    const r = await fetch(`${API}/student/me/lessons/${id}/cancel`, {
-      method: 'POST',
-      credentials: 'include',
-      body,
-    });
-    if (r.ok) {
-      alert('Урок отменён.');
-      loadLessons(1).catch(() => {});
-      setPage(1);
-      return;
-    }
-    let msg = 'Не удалось отменить урок.';
+    if (!isStudent) return;
+    setBusy(true);
     try {
-      const j = await r.json();
-      if (j?.message === 'too_late_to_cancel') msg = 'Слишком поздно для отмены урока.';
-    } catch {}
-    alert(msg);
+      const body = new URLSearchParams();
+      const r = await fetch(`${API}/student/me/lessons/${id}/cancel`, {
+        method: 'POST',
+        credentials: 'include',
+        body, // без Content-Type
+      });
+      if (r.ok) {
+        alert('Урок отменён.');
+        await loadLessons(1);
+        setPage(1);
+        return;
+      }
+      let msg = 'Не удалось отменить урок.';
+      try {
+        const j = await r.json();
+        if (j?.message === 'too_late_to_cancel') msg = 'Слишком поздно для отмены урока.';
+      } catch {}
+      alert(msg);
+    } finally {
+      setBusy(false);
+    }
   }
 
   const hello =
@@ -97,70 +116,74 @@ export default function StudentLK() {
         : 'Здравствуйте!';
 
   if (loading) return <div className="p-6">Загрузка…</div>;
-  if (!me) return <div className="p-6">Недостаточно прав. Пожалуйста, войдите как ученик.</div>;
+  if (!me) return <div className="p-6">Не авторизован. Войдите, пожалуйста.</div>;
 
   return (
     <div className="p-6">
-      {/* Приветствие */}
       <div className="mb-4 rounded-xl border border-black/10 bg-white shadow-sm p-4 text-lg font-semibold">
         {hello}
       </div>
 
-      {/* Ближайшие уроки */}
-      <section className="rounded-xl border border-black/10 bg-white shadow-sm p-4">
-        <div className="font-semibold mb-3">Ближайшие уроки</div>
-        {items.length === 0 ? (
-          <div className="text-sm opacity-70">Нет назначенных уроков.</div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {items.map(l => {
-              const starts = new Date(l.startsAt);
-              const hoursTo = Math.round((starts.getTime() - Date.now()) / 3_600_000);
-              const canCancel = starts.getTime() - Date.now() >= 8 * 3_600_000 && l.status === 'scheduled';
-              return (
-                <div key={l.id} className="flex items-center justify-between border rounded p-2">
-                  <div className="flex flex-col">
-                    <span className="text-sm">
-                      Преподаватель: {l.teacher?.firstName || l.teacher?.login || l.teacherId}
-                    </span>
-                    <span className="text-sm opacity-70">
-                      Начало: {starts.toLocaleString()} (≈ {hoursTo} ч)
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-sm">
-                      {typeof l.priceMinor === 'number' ? (l.priceMinor / 100).toFixed(2) + ' ₽' : '-'}
-                    </div>
-                    <button
-                      className="border rounded px-3 py-1 disabled:opacity-50"
-                      onClick={() => cancelLesson(l.id)}
-                      disabled={!canCancel}
-                      title={canCancel ? '' : 'Отмена доступна не позднее чем за 8 часов до начала'}
-                    >
-                      Отменить
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* пагинация */}
-        <div className="flex gap-2 mt-3">
-          <button
-            className="border rounded px-3 py-1 disabled:opacity-50"
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page <= 1}
-          >Назад</button>
-          <div className="px-2 py-1 text-sm">{page} / {pages}</div>
-          <button
-            className="border rounded px-3 py-1 disabled:opacity-50"
-            onClick={() => setPage(p => Math.min(pages, p + 1))}
-            disabled={page >= pages}
-          >Вперёд</button>
+      {!isStudent && (
+        <div className="mb-4 rounded-xl border border-amber-400 bg-amber-50 text-amber-900 p-3 text-sm">
+          Учётная запись не распознана как ученик. Проверьте роль в профиле или войдите под учёткой ученика.
         </div>
-      </section>
+      )}
+
+      {isStudent && (
+        <section className="rounded-xl border border-black/10 bg-white shadow-sm p-4">
+          <div className="font-semibold mb-3">Ближайшие уроки</div>
+          {items.length === 0 ? (
+            <div className="text-sm opacity-70">Нет назначенных уроков.</div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {items.map(l => {
+                const starts = new Date(l.startsAt);
+                const canCancel = starts.getTime() - Date.now() >= 8 * 3_600_000 && l.status === 'scheduled';
+                return (
+                  <div key={l.id} className="flex items-center justify-between border rounded p-2">
+                    <div className="flex flex-col">
+                      <span className="text-sm">
+                        Преподаватель: {l.teacher?.firstName || l.teacher?.login || l.teacherId}
+                      </span>
+                      <span className="text-sm opacity-70">
+                        Начало: {starts.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm">
+                        {typeof l.priceMinor === 'number' ? (l.priceMinor / 100).toFixed(2) + ' ₽' : '-'}
+                      </div>
+                      <button
+                        className="border rounded px-3 py-1 disabled:opacity-50"
+                        onClick={() => cancelLesson(l.id)}
+                        disabled={!canCancel || busy}
+                        title={canCancel ? '' : 'Отмена доступна не позднее чем за 8 часов до начала'}
+                      >
+                        Отменить
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex gap-2 mt-3">
+            <button
+              className="border rounded px-3 py-1 disabled:opacity-50"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+            >Назад</button>
+            <div className="px-2 py-1 text-sm">{page} / {pages}</div>
+            <button
+              className="border rounded px-3 py-1 disabled:opacity-50"
+              onClick={() => setPage(p => Math.min(pages, p + 1))}
+              disabled={page >= pages}
+            >Вперёд</button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
