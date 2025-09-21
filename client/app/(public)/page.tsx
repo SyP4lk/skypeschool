@@ -11,7 +11,7 @@ import dynamicClient from 'next/dynamic';
 import styles from '../Home.module.css';
 import SubjectSearch from '../components/SubjectSearch';
 import Image from 'next/image';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import TrialRequestModal from '../components/TrialRequestModal';
 import Link from 'next/link';
 
@@ -44,26 +44,6 @@ const categories: Category[] = [
   { title: 'Китайский язык',         icon: '/icons/thumbs/kitaj_8bfrwpul7o2d_512.webp',     alt: 'Китайский язык' },
   { title: 'Информатика ЕГЭ ОГЭ',    icon: '/icons/thumbs/informatika_0c2itb0a3w01_512.webp',alt: 'Информатика ЕГЭ ОГЭ' },
 ];
-
-  // ДИНАМИЧЕСКАЯ ПОДГРУЗКА из /public/data/popular-lessons.json (аддитивно, без ломки вёрстки)
-  const [dynCategories, setDynCategories] = useState<Category[]>(categories);
-  useEffect(() => {
-    let alive = true;
-    fetch('/data/popular-lessons.json', { cache: 'no-store' })
-      .then(r => r.json())
-      .then((j) => {
-        const arr = Array.isArray(j) ? j : (Array.isArray((j as any)?.items) ? (j as any).items : []);
-        const mapped = arr.map((x: any) => ({
-          title: String(x.title || '').trim(),
-          alt: String(x.alt || x.title || '').trim(),
-          icon: String(x.icon || ''),
-        })).filter((x: any) => x.title && x.icon);
-        if (alive && mapped.length > 0) setDynCategories(mapped);
-      })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, []);
-
 
 const features = [
   {
@@ -140,7 +120,27 @@ const testimonials = [
 export default function HomePage() {
   const [trialOpen, setTrialOpen] = useState(false);
 
-  return (
+  
+  // Источник карточек: по умолчанию статический массив `categories`,
+  // но если админ наполнил JSON, подменяем данные динамическими.
+  const [dynCategories, setDynCategories] = useState<Category[]>(categories);
+  useEffect(() => {
+    let alive = true;
+    fetch('/data/popular-lessons.json', { cache: 'no-store' })
+      .then(r => r.json())
+      .then((j) => {
+        const arr = Array.isArray(j) ? j : (Array.isArray((j as any)?.items) ? (j as any).items : []);
+        const mapped = arr.map((x: any) => ({
+          title: String(x.title || '').trim(),
+          alt: String(x.alt || x.title || '').trim(),
+          icon: String(x.icon || ''),
+        })).filter((x: any) => x.title && x.icon);
+        if (alive && mapped.length > 0) setDynCategories(mapped);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+return (
     <main>
       {/* Hero */}
       <section className={styles.hero}>
