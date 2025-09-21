@@ -1,1 +1,0 @@
-Комбо-патч: баланс (allSettled + fallback /auth/me) + публичный /settings/topup-info и клиентский вызов.

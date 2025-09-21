@@ -1,9 +1,0 @@
-// Добавьте в prisma/schema.prisma:
-model Article {
-  id        String   @id @default(uuid())
-  slug      String   @unique
-  title     String
-  content   String
-  image     String?
-  createdAt DateTime @default(now())
-}
