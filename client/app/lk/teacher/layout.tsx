@@ -3,13 +3,27 @@ import { redirect } from 'next/navigation';
 import { ssrApiJson } from '@/lib/ssr';
 
 export default async function Layout({ children }: { children: ReactNode }) {
-  const me = await ssrApiJson('/auth/me').catch(()=>null);
+  const me = await ssrApiJson('/auth/me').catch(() => null);
   if (!me?.role) redirect('/login');
-  if (String(me.role).toLowerCase() !== 'teacher') {
-    const r = String(me.role || '').toLowerCase();
-    if (r === 'admin') redirect('/admin');
-    if (r === 'student') redirect('/lk/student');
+
+  const role = String(me.role).toLowerCase();
+  if (role !== 'teacher') {
+    if (role === 'student') redirect('/lk/student');
+    if (role === 'admin') redirect('/admin');
     redirect('/login');
   }
-  return <>{children}</>;
+
+  return (
+    <>
+      {/* Приветствие — маленькая строка, не ломает сетку */}
+      <div className="mb-2 text-sm">
+        {(() => {
+          const name = (me && (me.firstName || me.login)) || '';
+          return <>Здравствуйте{ name ? `, ${name}` : '' }!</>;
+        })()}
+      </div>
+
+      {children}
+    </>
+  );
 }
