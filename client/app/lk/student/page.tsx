@@ -1,6 +1,8 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from './_lib/api';
+import { NotifyCenter } from '@/shared/ui/NotifyCenter';
+import { notify, toHuman } from '@/shared/ui/notify';
 
 const fmtMoney = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' });
 const fmtDate = new Intl.DateTimeFormat(undefined, {
@@ -37,8 +39,6 @@ const teacherLabel = (t?: Lesson['teacher']) => {
 
 export default function StudentLK() {
   const [balance, setBalance] = useState<number>(0);
-  const [err, setErr] = useState<string|null>(null);
-  const [msg, setMsg] = useState<string|null>(null);
   const [helloName, setHelloName] = useState<string>('');
   const [upcoming, setUpcoming] = useState<Lesson[]>([]);
   const [doneList, setDoneList] = useState<Lesson[]>([]);
@@ -66,14 +66,14 @@ export default function StudentLK() {
       try {
         const me = await api('/auth/me');
         setHelloName((me?.firstName || me?.login || '').trim());
-      } catch {}
+      } catch {/* no-op */}
     })();
   }, []);
 
   useEffect(() => {
     (async () => {
       try { await Promise.all([loadBalance(), loadLessons(), loadTopupText()]); }
-      catch (e:any) { setErr(e?.message || 'Ошибка загрузки'); }
+      catch (e:any) { notify(toHuman(e?.message || ''), 'error'); }
     })();
   }, []);
 
@@ -141,7 +141,8 @@ export default function StudentLK() {
         )}
       </section>
 
-      {err && <div className="text-sm text-red-600">{err}</div>}
+      {/* Единый центр уведомлений (оверлей) */}
+      <NotifyCenter />
     </div>
   );
 }

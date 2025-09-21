@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from './_lib/api';
-
-
+import { NotifyCenter } from '@/shared/ui/NotifyCenter';
+import { notify, toHuman } from '@/shared/ui/notify';
 
 const fmtMoney = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' });
 const fmtDate = new Intl.DateTimeFormat(undefined, {
@@ -52,9 +52,6 @@ const studentLabel = (st?: Lesson['student']) => {
 export default function TeacherLK() {
   const [balance, setBalance] = useState<number>(0);
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [err, setErr] = useState<string|null>(null);
-  const [msg, setMsg] = useState<string|null>(null);
-
   const [helloName, setHelloName] = useState<string>('');
 
   const [studentQuery, setStudentQuery] = useState('');
@@ -106,23 +103,16 @@ export default function TeacherLK() {
       try {
         const me = await api('/auth/me');
         setHelloName((me?.firstName || me?.login || '').trim());
-      } catch {}
+      } catch {/* no-op */}
     })();
   }, []);
 
   useEffect(() => {
     (async () => {
       try { await Promise.all([loadBalance(), loadSubjects(), loadLessons()]); }
-      catch (e:any) { setErr(e?.message || 'Ошибка загрузки'); }
+      catch (e:any) { notify(toHuman(e?.message || ''), 'error'); }
     })();
   }, []);
-
-  useEffect(() => {
-    if (activeSubject) {
-      if (!duration) setDuration(String(activeSubject.durationMin || ''));
-      if (!price) setPrice(String(activeSubject.price || ''));
-    }
-  }, [activeSubject]);
 
   useEffect(() => {
     const q = studentQuery.trim();
@@ -136,8 +126,15 @@ export default function TeacherLK() {
     return () => ctrl.abort();
   }, [studentQuery]);
 
+  useEffect(() => {
+    const s = activeSubject;
+    if (s) {
+      if (!duration) setDuration(String(s.durationMin || ''));
+      if (!price) setPrice(String(s.price || ''));
+    }
+  }, [activeSubject, duration, price]);
+
   async function createLesson() {
-    setErr(null); setMsg(null);
     try {
       if (!studentId) throw new Error('Выберите ученика');
       if (!subjectId) throw new Error('Выберите предмет');
@@ -164,15 +161,16 @@ export default function TeacherLK() {
         }),
       });
 
-      setMsg('Урок назначен');
+      notify('Урок назначен', 'success');
       setStudentId(''); setStudentQuery(''); setSubjectId(''); setStartsAtLocal('');
       setDuration(''); setPrice(''); setComment('');
-      await loadLessons(); // обновим списки без перезагрузки
-    } catch (e: any) { setErr(e?.message || 'Ошибка'); }
+      await loadLessons();
+    } catch (e:any) {
+      notify(toHuman(e?.message || ''), 'error');
+    }
   }
 
   async function markDone(lessonId: string) {
-    setErr(null); setMsg(null);
     // оптимистично переносим в "проведённые"
     const l = upcoming.find(x => x.id === lessonId);
     if (l) {
@@ -182,28 +180,26 @@ export default function TeacherLK() {
     try {
       await api(`/teacher/me/lessons/${lessonId}/done`, { method: 'PATCH' });
       await loadBalance();
-      setMsg('Урок проведён');
-    } catch (e: any) {
+      notify('Урок проведён', 'success');
+    } catch (e:any) {
       await loadLessons(); // откат до серверного состояния
-      setErr(e?.message || 'Не удалось завершить урок');
+      notify(toHuman(e?.message || 'Не удалось завершить урок'), 'error');
     }
   }
 
   async function cancelLesson(lessonId: string) {
-    setErr(null); setMsg(null);
     const backup = upcoming;
     setUpcoming(prev => prev.filter(x => x.id !== lessonId));
     try {
       await api(`/teacher/me/lessons/${lessonId}/cancel`, { method: 'PATCH' });
-      setMsg('Урок отменён');
+      notify('Урок отменён', 'success');
     } catch (e:any) {
       setUpcoming(backup);
-      setErr(e?.message || 'Не удалось отменить урок');
+      notify(toHuman(e?.message || 'Не удалось отменить урок'), 'error');
     }
   }
 
   async function createWithdraw() {
-    setErr(null); setMsg(null);
     try {
       const amountRub = parseFloat((withdrawAmount || '0').replace(',', '.'));
       const amount = Math.round(amountRub); // на вывод — целые ₽
@@ -212,8 +208,11 @@ export default function TeacherLK() {
         method: 'POST',
         body: JSON.stringify({ amount, notes: withdrawNotes || '' }),
       });
-      setMsg('Заявка отправлена'); setWithdrawAmount(''); setWithdrawNotes('');
-    } catch (e: any) { setErr(e?.message || 'Ошибка вывода'); }
+      notify('Заявка отправлена', 'success');
+      setWithdrawAmount(''); setWithdrawNotes('');
+    } catch (e:any) {
+      notify(toHuman(e?.message || 'Ошибка вывода'), 'error');
+    }
   }
 
   return (
@@ -286,8 +285,6 @@ export default function TeacherLK() {
         </div>
         <div className="mt-3">
           <button className="px-3 py-2 rounded border" onClick={createLesson}>Создать</button>
-          {msg && <span className="text-green-700 text-sm ml-3">{msg}</span>}
-          {err && <span className="text-red-600 text-sm ml-3">{err}</span>}
         </div>
       </section>
 
@@ -350,8 +347,13 @@ export default function TeacherLK() {
             <input className="w-full rounded border px-3 py-2" value={withdrawNotes} onChange={(e)=>setWithdrawNotes(e.target.value)} />
           </div>
         </div>
-        <div className="mt-3"><button className="px-3 py-2 rounded border" onClick={createWithdraw}>Отправить</button></div>
+        <div className="mt-3">
+          <button className="px-3 py-2 rounded border" onClick={createWithdraw}>Отправить</button>
+        </div>
       </section>
+
+      {/* Единый центр уведомлений (оверлей) */}
+      <NotifyCenter />
     </div>
   );
 }
