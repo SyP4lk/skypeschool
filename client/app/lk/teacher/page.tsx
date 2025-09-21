@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from './_lib/api';
 
+
+
 const fmtMoney = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' });
 const fmtDate = new Intl.DateTimeFormat(undefined, {
   year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
@@ -53,6 +55,8 @@ export default function TeacherLK() {
   const [err, setErr] = useState<string|null>(null);
   const [msg, setMsg] = useState<string|null>(null);
 
+  const [helloName, setHelloName] = useState<string>('');
+
   const [studentQuery, setStudentQuery] = useState('');
   const [studentId, setStudentId] = useState<string>('');
   const [studentList, setStudentList] = useState<{id:string;label:string}[]>([]);
@@ -96,6 +100,15 @@ export default function TeacherLK() {
         .sort((a,b)=>+new Date(b.startsAt)-+new Date(a.startsAt))
     );
   }
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const me = await api('/auth/me');
+        setHelloName((me?.firstName || me?.login || '').trim());
+      } catch {}
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -205,6 +218,12 @@ export default function TeacherLK() {
 
   return (
     <div className="max-w-3xl mx-auto py-6 space-y-6">
+      <section className="rounded-xl border p-4">
+        <div className="text-sm">
+          {`Здравствуйте${helloName ? `, ${helloName}` : ''}!`}
+        </div>
+      </section>
+
       <section className="rounded-xl border p-4">
         <div className="text-sm text-gray-500">Баланс</div>
         <div className="text-2xl mt-1">{fmtMoney.format(Number(balance || 0))}</div>

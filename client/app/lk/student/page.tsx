@@ -39,7 +39,7 @@ export default function StudentLK() {
   const [balance, setBalance] = useState<number>(0);
   const [err, setErr] = useState<string|null>(null);
   const [msg, setMsg] = useState<string|null>(null);
-
+  const [helloName, setHelloName] = useState<string>('');
   const [upcoming, setUpcoming] = useState<Lesson[]>([]);
   const [doneList, setDoneList] = useState<Lesson[]>([]);
   const [topupText, setTopupText] = useState<string>('');
@@ -63,6 +63,15 @@ export default function StudentLK() {
 
   useEffect(() => {
     (async () => {
+      try {
+        const me = await api('/auth/me');
+        setHelloName((me?.firstName || me?.login || '').trim());
+      } catch {}
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
       try { await Promise.all([loadBalance(), loadLessons(), loadTopupText()]); }
       catch (e:any) { setErr(e?.message || 'Ошибка загрузки'); }
     })();
@@ -70,6 +79,12 @@ export default function StudentLK() {
 
   return (
     <div className="max-w-3xl mx-auto py-6 space-y-6">
+      <section className="rounded-xl border p-4">
+        <div className="text-sm">
+          {`Здравствуйте${helloName ? `, ${helloName}` : ''}!`}
+        </div>
+      </section>
+
       <section className="rounded-xl border p-4">
         <div className="text-sm text-gray-500">Баланс</div>
         <div className="text-2xl mt-1">{fmtMoney.format(Number(balance || 0))}</div>
