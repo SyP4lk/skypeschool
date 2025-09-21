@@ -1,4 +1,3 @@
-
 'use client';
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -43,10 +42,13 @@ export function useToast() {
   return ctx.toast;
 }
 
+// ---- Глобальный перехватчик fetch с безопасным кастом типов ----
 export function installFetchToasts(toast: (v:{type:'success'|'error'|'info'; message:string})=>void) {
   if (typeof window === 'undefined') return;
-  if ((window as any).__fetchToastsInstalled) return;
-  (window as any).__fetchToastsInstalled = true;
+  const w = window as any;
+  if (w.__fetchToastsInstalled) return;
+  w.__fetchToastsInstalled = true;
+
   const HUMAN: Record<string,string> = {
     insufficient_funds: 'У ученика недостаточно средств.',
     too_late_to_cancel: 'Слишком поздно для отмены урока.',
@@ -55,16 +57,21 @@ export function installFetchToasts(toast: (v:{type:'success'|'error'|'info'; mes
     login_taken: 'Такой логин уже занят.',
     email_taken: 'Эта почта уже используется.',
   };
-  const orig = window.fetch.bind(window);
-  window.fetch = async (...args: any[]) => {
-    const res = await orig(...args);
+
+  // Важно: привязываем и явно кастуем к any, чтобы TS не ругался на spread/параметры
+  const orig: any = w.fetch.bind(window);
+
+  w.fetch = async (input: any, init?: any) => {
+    const res: Response = await orig(input, init);
     try {
-      if (!res.ok && res.headers.get('content-type')?.includes('application/json')) {
-        const j = await res.clone().json();
-        let msg = (typeof j?.message === 'string' ? j.message : (Array.isArray(j?.message) ? j.message[0] : ''));
+      const ct = res.headers.get('content-type') || '';
+      if (!res.ok && ct.includes('application/json')) {
+        const j: any = await res.clone().json();
+        let msg = typeof j?.message === 'string' ? j.message
+                : (Array.isArray(j?.message) ? j.message[0] : '');
         if (msg) toast({ type: 'error', message: HUMAN[msg] || 'Ошибка запроса' });
       }
-    } catch {}
+    } catch { /* игнор */ }
     return res;
   };
 }
