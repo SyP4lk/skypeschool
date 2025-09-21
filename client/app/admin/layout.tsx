@@ -16,5 +16,5 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   }
 
   // НИКАКИХ client-side редиректов здесь.
-  return <>{children}</>
+  return <>{children}</>;
 }
