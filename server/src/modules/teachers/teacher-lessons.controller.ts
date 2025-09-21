@@ -84,6 +84,22 @@ export class TeacherLessonsController {
     const student = await this.prisma.user.findUnique({ where: { id: body.studentId } });
     if (!student || student.role !== 'student') throw new BadRequestException('student not found');
 
+    // === АДДИТИВНАЯ ПРОВЕРКА БАЛАНСА (без миграций/ломки схемы) ===
+    // Если у пользователя есть поле balance (в копейках) и его меньше, чем цена урока — запрещаем создание
+    try {
+      const balanceMinor = Number((student as any)?.balance);
+      if (Number.isFinite(balanceMinor) && Number.isFinite(priceMinor) && balanceMinor < priceMinor) {
+        // Ровно тот контракт, который ждёт фронт
+        throw new BadRequestException({ message: 'insufficient_funds' });
+      }
+    } catch (e) {
+      // Если ошибка связана именно с нашим кодом "insufficient_funds" — пробрасываем,
+      // иначе тихо игнорируем (например, поля balance нет в схеме) и идём дальше.
+      const msg = (e as any)?.response?.message || (e as any)?.message;
+      if (String(msg) === 'insufficient_funds') throw e;
+    }
+    // === /конец аддитивной проверки ===
+
     const end = new Date(startsAt.getTime() + Number(body.durationMin) * 60000);
 
     // Проверка пересечений (в JS, учитываем только planned в окрестности 6ч)
