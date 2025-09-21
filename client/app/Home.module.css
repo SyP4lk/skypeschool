@@ -1,0 +1,438 @@
+/* Styles specific to the home page */
+
+/* Hero section with background image and overlay.  The large
+ * background image is set via CSS; we use an ::before pseudo-element
+ * to add a dark overlay for better contrast with the white text. */
+.hero {
+  position: relative;
+  background-image: url('/hero-bg.jpg');
+  background-attachment: fixed;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  padding: 15rem 0;
+  text-align: center;
+  color: #fff;
+}
+
+/* Overlay for the hero background */
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 0;
+}
+
+/* Ensure hero content appears above the overlay */
+.hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.heroTitle {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  /* Override primary colour in hero context so the text is white */
+  color: #ffffff;
+}
+
+.heroSubtitle {
+  font-size: 1.25rem;
+  margin-bottom: 2rem;
+  color: #eaeaea;
+}
+
+.searchForm {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.searchInput {
+  flex: 1 1 300px;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px 0 0 4px;
+  background-color: #e0dede;
+  color: #2a2d30;
+}
+
+.searchButton {
+  flex: 0 0 auto;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  background: var(--colour-primary);
+  color: #fff;
+  border: none;
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+}
+
+.heroSubtext {
+  font-size: 0.9rem;
+  color: #dddddd;
+  margin-top: 1rem;
+}
+
+.categories {
+  padding: 4rem 0;
+  background: #fff;
+}
+
+.categories h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+  font-size: 2rem;
+}
+
+.categoriesGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 0px;
+}
+
+.categoryItem {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem;
+    background: #f9fafc;
+    transition: transform .2s ease-in-out, box-shadow .2s ease-in-out;
+    cursor: pointer;
+    border: 1px solid #e0dede;
+}
+
+.categoryItem:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.categoryIcon {
+  font-size: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.categoryTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.features {
+  padding: 4rem 0;
+  background: var(--colour-bg);
+}
+
+.features h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+  font-size: 2rem;
+}
+
+.featuresGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+}
+
+.featureItem {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  background: #fff;
+  padding: 1.5rem;
+  border-radius: 8px;
+  text-align: center;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.featureItem:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.featureIcon {
+  font-size: 2rem;
+  margin-bottom: 0.75rem;
+  color: var(--colour-secondary);
+}
+
+.featureTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.featureDescription {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.trial {
+  padding: 56px 0;
+  background: #fff;
+  text-align: center;
+  min-height: 700px;
+}
+.trialGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  align-items: center;
+}
+@media (min-width: 1024px) {
+  .trialGrid {
+    grid-template-columns: 1fr 1fr; /* слева картинка, справа контент */
+    gap: 40px;
+  }
+}
+.trial h2 {
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+}
+.trialImage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;     /* удерживаем высоту до загрузки */
+  border-radius: 16px;
+  min-height: 700px;
+  overflow: hidden;
+  background: #f7f7f7;
+}
+.trialImage :global(img) {
+  object-fit: cover;
+}
+.trial p {
+  font-size: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.trialButtons {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.trialButton {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.trialButton.primary {
+  background: var(--colour-primary);
+  color: #fff;
+}
+
+.trialButton.primary:hover {
+  background: #e78210;
+}
+
+.trialButton.secondary {
+  background: var(--colour-secondary);
+  color: #fff;
+}
+
+.trialButton.secondary:hover {
+  background: #1e4bb5;
+}
+
+.steps {
+  padding: 4rem 0;
+  background: var(--colour-bg);
+}
+
+.steps h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+  font-size: 2rem;
+}
+
+.stepsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+}
+
+.stepItem {
+  background: #fff;
+  padding: 2rem 1.5rem;
+  border-radius: 8px;
+  text-align: center;
+  position: relative;
+}
+
+.relative{
+  display: flex;
+}
+.stepNumber {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--colour-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.stepTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.stepDescription {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.testimonials {
+  padding: 4rem 0;
+  background: #fff;
+}
+
+.testimonials h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+  font-size: 2rem;
+}
+
+.testimonialSlider {
+  max-width: 700px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.testimonialItem {
+  display: none;
+  text-align: center;
+  padding: 1.5rem;
+  background: var(--colour-bg);
+  border-radius: 8px;
+}
+
+.testimonialItem.active {
+  display: block;
+}
+
+.testimonialQuote {
+  font-style: italic;
+  margin-bottom: 1rem;
+}
+
+.testimonialAuthor {
+  font-weight: 600;
+  color: var(--colour-secondary);
+}
+
+.testimonialNav {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.testimonialNavButton {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ccc;
+  cursor: pointer;
+}
+
+.testimonialNavButton.active {
+  background: var(--colour-secondary);
+}
+
+.footer {
+  background: #2a2d30;
+  color: #fff;
+  padding: 3rem 0;
+}
+
+.footerColumns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.footerLogo {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.footerColumn h4 {
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+}
+
+.footerColumn ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.footerColumn li {
+  margin-bottom: 0.5rem;
+}
+
+.footerColumn a {
+  color: #fff;
+  text-decoration: none;
+}
+
+.footerColumn a:hover {
+  text-decoration: underline;
+}
+
+.footerBottom {
+  text-align: center;
+  font-size: 0.85rem;
+  color: #aaa;
+}
+
+@media (max-width: 1024px) {
+  .categoriesGrid { grid-template-columns: repeat(3, 1fr); grid-template-rows: auto; }
+}
+@media (max-width: 640px) {
+  .categoriesGrid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* --- Trial image with edge blur --- */
+.trialImage {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  /* у тебя уже есть размеры/минимальная высота — оставляем */
+}
+
+.trialImgBlur,
+.trialImgSharp {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+
+/* можно ослабить эффект на системах с отключённой анимацией */
+@media (prefers-reduced-motion: reduce) {
+  .trialImgBlur { filter: blur(12px); }
+}
+
+
+
+
+/* performance: content-visibility */
+.cvAuto{content-visibility:auto;contain-intrinsic-size:800px;}

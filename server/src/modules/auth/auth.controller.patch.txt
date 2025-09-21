@@ -1,0 +1,31 @@
+// --- PATCH: add registration endpoint ---
+@HttpCode(200)
+@Post('register-student')
+async registerStudent(@Req() req: any, @Res({ passthrough: true }) res: Response) {
+  const body = req.body || {};
+  const login = String(body.login || '').trim();
+  const password = String(body.password || '');
+  if (!login || !password) throw new BadRequestException('login and password are required');
+
+  // Проверка занятости
+  const exists = await this.prisma.user.findUnique({ where: { login } });
+  if (exists) throw new BadRequestException('login already taken');
+
+  const hash = await argon2.hash(password);
+  const user = await this.prisma.user.create({
+    data: {
+      login,
+      passwordHash: hash,
+      role: 'student',
+      firstName: body.firstName || null,
+      lastName: body.lastName || null,
+      studentProfile: { create: {} },
+    },
+    select: { id: true, login: true, role: true },
+  });
+
+  const token = await this.auth.sign(user);
+  res.cookie('token', token, this.cookieOptions());
+  return { ok: true, user };
+}
+// --- END PATCH ---

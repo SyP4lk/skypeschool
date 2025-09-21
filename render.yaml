@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: skype-school-server
+    env: node
+    nodeVersion: 20
+    rootDir: server
+    buildCommand: npm ci && npm run build
+    startCommand: npx prisma migrate deploy && node dist/main.js
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: ALLOWED_ORIGINS
+        value: https://skype-school-client.onrender.com
+  - type: web
+    name: skype-school-client
+    env: node
+    nodeVersion: 20
+    rootDir: client
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://skype-school-server.onrender.com/api
