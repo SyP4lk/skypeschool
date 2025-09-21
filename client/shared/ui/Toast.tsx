@@ -11,8 +11,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [items, setItems] = useState<ToastItem[]>([]);
   const toast = useCallback(({ type, message }: { type: ToastItem['type']; message: string }) => {
     const id = Date.now() + Math.random();
-    setItems((a) => [...a, { id, type, message }]);
-    setTimeout(() => setItems((a) => a.filter(x => x.id !== id)), 4000);
+    setItems(a => [...a, { id, type, message }]);
+    setTimeout(() => setItems(a => a.filter(x => x.id !== id)), 4000);
   }, []);
   const value = useMemo(() => ({ toast }), [toast]);
 
@@ -42,6 +42,7 @@ export function useToast() {
   return ctx.toast;
 }
 
+// перехватчик fetch с мягкими типами
 export function installFetchToasts(toast: (v:{type:'success'|'error'|'info'; message:string})=>void) {
   if (typeof window === 'undefined') return;
   const w = window as any;
@@ -58,9 +59,26 @@ export function installFetchToasts(toast: (v:{type:'success'|'error'|'info'; mes
   };
 
   const orig: any = w.fetch.bind(window);
-
   w.fetch = async (input: any, init?: any) => {
+    const method = (init && typeof init === 'object' && 'method' in init)
+      ? String((init as any).method || 'GET').toUpperCase() : 'GET';
+    const url = (typeof input === 'string') ? input : (input && input.url) ? input.url : '';
+
     const res: Response = await orig(input, init);
+
+    // успехи, если нужно
+    try {
+      if (res.ok) {
+        if (method === 'POST' && /\\/student\\/me\\/lessons\\/[^/]+\\/cancel$/.test(url)) {
+          toast({ type: 'success', message: 'Урок отменён.' });
+        }
+        if (method === 'POST' && /\\/teacher\\/me\\/lessons$/.test(url)) {
+          toast({ type: 'success', message: 'Урок назначен.' });
+        }
+      }
+    } catch {}
+
+    // ошибки
     try {
       const ct = res.headers.get('content-type') || '';
       if (!res.ok && ct.includes('application/json')) {
@@ -70,6 +88,7 @@ export function installFetchToasts(toast: (v:{type:'success'|'error'|'info'; mes
         if (msg) toast({ type: 'error', message: HUMAN[msg] || 'Ошибка запроса' });
       }
     } catch {}
+
     return res;
   };
 }
