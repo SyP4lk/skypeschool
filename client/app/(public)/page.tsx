@@ -11,7 +11,7 @@ import dynamicClient from 'next/dynamic';
 import styles from '../Home.module.css';
 import SubjectSearch from '../components/SubjectSearch';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import TrialRequestModal from '../components/TrialRequestModal';
 import Link from 'next/link';
 
