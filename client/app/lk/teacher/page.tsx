@@ -1,131 +1,58 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { api } from './_lib/api';
 
-const API = (process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/$/, '');
+const fmtMoney = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' });
+const fmtDate = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+});
 
-type RawRole = string | null | undefined;
-type Me = {
-  id: string;
-  role?: RawRole;
-  login?: string|null;
-  firstName?: string|null;
-};
+type Me = { id: string; login?: string | null; firstName?: string | null };
 
+type Subject = { subjectId: string; name: string; price: number; durationMin: number };
 type Lesson = {
   id: string;
-  studentId: string;
-  teacherId: string;
   startsAt: string;
-  status: 'scheduled'|'done'|'canceled_by_student'|'canceled_by_teacher'|string;
-  priceMinor?: number|null;
-  student?: { id: string; login?: string|null; firstName?: string|null } | null;
+  duration?: number | null;
+  durationMin?: number | null;
+  price?: number | null;          // старые записи: рубли
+  priceCents?: number | null;     // новые записи: копейки
+  status?: string | null;         // planned/completed/cancelled|DONE|...
+  student?: { id: string; login?: string | null; firstName?: string | null; lastName?: string | null } | null;
+  subjectName?: string | null;
+  subjectId?: string | null;
+  comment?: string | null;
 };
 
-function normRole(v: RawRole): 'teacher'|'student'|'admin'|'other' {
-  const s = String(v ?? '').trim().toLowerCase();
-  if (['teacher', 'преподаватель', 'teach', 't'].includes(s)) return 'teacher';
-  if (['student', 'ученик', 'stud', 's'].includes(s)) return 'student';
-  if (['admin', 'administrator', 'a'].includes(s)) return 'admin';
-  return 'other';
+// === helpers ===
+function normalizeStatus(s?: string | null): 'PLANNED'|'DONE'|'CANCELED' {
+  const v = String(s || '').trim().toLowerCase();
+  if (v === 'completed' || v === 'done') return 'DONE';
+  if (v === 'cancelled' || v === 'canceled') return 'CANCELED';
+  return 'PLANNED';
 }
+const lDuration = (l: Lesson) => Number(l.durationMin ?? l.duration ?? 60);
+
+// приведение к копейкам (унификация старых/новых записей)
+const lPriceCents = (l: Lesson) => {
+  const pc = Number((l as any).priceCents);
+  if (Number.isFinite(pc) && pc > 0) return pc;
+  const p = Number(l.price ?? 0);
+  if (!Number.isFinite(p) || p <= 0) return 0;
+  // если выглядит как рубли — умножаем
+  return p >= 1000 ? Math.round(p) : Math.round(p * 100);
+};
+
+const studentLabel = (st?: Lesson['student']) => {
+  if (!st) return '';
+  const fio = [st.lastName, st.firstName].filter(Boolean).join(' ');
+  return [st.login, fio].filter(Boolean).join(' — ');
+};
 
 export default function TeacherLK() {
+  // Приветствие + уведомления
   const [me, setMe] = useState<Me | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // список ближайших уроков
-  const [page, setPage] = useState(1);
-  const [limit] = useState(10);
-  const [items, setItems] = useState<Lesson[]>([]);
-  const [total, setTotal] = useState(0);
-  const pages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        // прогрев
-        fetch(API.replace(/\/api$/, ''), { credentials: 'include' }).catch(() => {});
-        const r = await fetch(`${API}/auth/me`, { credentials: 'include' });
-        if (!r.ok) throw new Error('unauthorized');
-        const u: Me = await r.json();
-        if (cancelled) return;
-        setMe(u); // не обнуляем — храним как есть
-      } catch {
-        setMe(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  // загрузка уроков
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!me?.id) return;
-      // Если это точно не teacher — просто не грузим учительские данные, но страницу не ломаем
-      if (normRole(me.role) !== 'teacher') return;
-
-      try {
-        const r = await fetch(`${API}/teacher/me/lessons?status=upcoming&page=${page}&limit=${limit}`, {
-          credentials: 'include',
-        });
-        if (!r.ok) throw new Error();
-        const j = await r.json();
-        if (cancelled) return;
-        setItems(Array.isArray(j?.items) ? j.items : (Array.isArray(j) ? j : []));
-        setTotal(typeof j?.total === 'number' ? j.total : (Array.isArray(j) ? j.length : 0));
-      } catch {
-        if (!cancelled) { setItems([]); setTotal(0); }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [me?.id, me?.role, page, limit]);
-
-  // форма
-  const [form, setForm] = useState<{ studentId: string; startsAt: string; priceMinor: string }>({
-    studentId: '',
-    startsAt: '',
-    priceMinor: '',
-  });
-  const onForm = (k: keyof typeof form, v: string) => setForm(s => ({ ...s, [k]: v }));
-
-  async function createLesson(e: React.FormEvent) {
-    e.preventDefault();
-    const body = new URLSearchParams();
-    if (form.studentId) body.append('studentId', form.studentId);
-    if (form.startsAt) body.append('startsAt', form.startsAt);
-    if (form.priceMinor) body.append('priceMinor', form.priceMinor);
-
-    const r = await fetch(`${API}/teacher/me/lessons`, {
-      method: 'POST',
-      credentials: 'include',
-      body, // без Content-Type — избегаем preflight
-    });
-
-    if (r.ok) {
-      alert('Урок назначен.');
-      // перезагрузка списка
-      setPage(1);
-      try {
-        const rr = await fetch(`${API}/teacher/me/lessons?status=upcoming&page=1&limit=${limit}`, { credentials: 'include' });
-        const j = await rr.json();
-        setItems(Array.isArray(j?.items) ? j.items : (Array.isArray(j) ? j : []));
-        setTotal(typeof j?.total === 'number' ? j.total : (Array.isArray(j) ? j.length : 0));
-      } catch {}
-      return;
-    }
-    let msg = 'Не удалось назначить урок.';
-    try {
-      const j = await r.json();
-      if (j?.message === 'insufficient_funds') msg = 'У ученика недостаточно средств.';
-    } catch {}
-    alert(msg);
-  }
-
   const hello =
     me?.firstName?.trim()
       ? `Здравствуйте, ${me.firstName}!`
@@ -133,103 +60,340 @@ export default function TeacherLK() {
         ? `Здравствуйте, ${me.login}!`
         : 'Здравствуйте!';
 
-  if (loading) return <div className="p-6">Загрузка…</div>;
-  if (!me) return <div className="p-6">Не авторизован. Войдите, пожалуйста.</div>;
+  const [notice, setNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const showOk = (text: string) => setNotice({ type: 'ok', text });
+  const showErr = (text: string) => setNotice({ type: 'err', text });
 
-  const role = normRole(me.role);
-  const isTeacher = role === 'teacher';
+  const [balance, setBalance] = useState<number>(0);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [err, setErr] = useState<string|null>(null);     // локальная для блока "Назначить урок"
+  const [msg, setMsg] = useState<string|null>(null);     // локальная для блока "Назначить урок"
+
+  const [studentQuery, setStudentQuery] = useState('');
+  const [studentId, setStudentId] = useState<string>('');
+  const [studentList, setStudentList] = useState<{id:string;label:string}[]>([]);
+
+  const [subjectId, setSubjectId] = useState('');
+  const [startsAtLocal, setStartsAtLocal] = useState('');
+  const [duration, setDuration] = useState('');
+  const [price, setPrice] = useState(''); // ₽ для инпута
+  const [comment, setComment] = useState('');
+
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [withdrawNotes, setWithdrawNotes] = useState('');
+
+  const [upcoming, setUpcoming] = useState<Lesson[]>([]);
+  const [doneList, setDoneList] = useState<Lesson[]>([]);
+
+  const activeSubject = useMemo(
+    () => subjects.find(s => s.subjectId === subjectId),
+    [subjects, subjectId],
+  );
+
+  async function loadMe() {
+    try {
+      const u = await api<Me>('/auth/me');
+      setMe(u || null);
+    } catch (_) {
+      setMe(null);
+    }
+  }
+  async function loadBalance() {
+    const b = await api<{ balance: number; currency: string }>('/finance/me/balance');
+    setBalance(Number(b?.balance ?? 0) / 100); // копейки → ₽
+  }
+  async function loadSubjects() {
+    const subs = await api<Subject[]>('/teacher/me/subjects');
+    setSubjects(Array.isArray(subs) ? subs : []);
+  }
+  async function loadLessons() {
+    const rows = await api<Lesson[]>('/teacher/me/lessons');
+    const norm = (Array.isArray(rows) ? rows : []).map(l => ({ ...l, status: normalizeStatus(l.status) }));
+    setUpcoming(
+      norm
+        .filter(l => l.status === 'PLANNED')
+        .sort((a,b)=>+new Date(a.startsAt)-+new Date(b.startsAt))
+    );
+    setDoneList(
+      norm
+        .filter(l => l.status === 'DONE')
+        .sort((a,b)=>+new Date(b.startsAt)-+new Date(a.startsAt))
+    );
+  }
+
+  useEffect(() => {
+    (async () => {
+      try { await Promise.all([loadMe(), loadBalance(), loadSubjects(), loadLessons()]); }
+      catch (e:any) { setErr(e?.message || 'Ошибка загрузки'); }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (activeSubject) {
+      if (!duration) setDuration(String(activeSubject.durationMin || ''));
+      if (!price) setPrice(String(activeSubject.price || ''));
+    }
+  }, [activeSubject]);
+
+  useEffect(() => {
+    const q = studentQuery.trim();
+    if (q.length < 2) { setStudentList([]); return; }
+    const ctrl = new AbortController();
+    api<{ id: string; label: string }[]>(
+      `/teacher/me/students?q=${encodeURIComponent(q)}`,
+      { signal: ctrl.signal as any },
+    ).then(list => setStudentList(Array.isArray(list) ? list : []))
+     .catch(() => {});
+    return () => ctrl.abort();
+  }, [studentQuery]);
+
+  async function createLesson() {
+    setErr(null); setMsg(null); setNotice(null);
+    try {
+      if (!studentId) throw new Error('Выберите ученика');
+      if (!subjectId) throw new Error('Выберите предмет');
+      if (!startsAtLocal) throw new Error('Укажите дату и время');
+
+      const startsAt = new Date(startsAtLocal);
+      const durationMin = parseInt(duration || '0', 10);
+
+      // ₽ → копейки
+      const priceRub = parseFloat((price || '0').replace(',', '.'));
+      const priceKop = Math.round(priceRub * 100);
+      if (!Number.isFinite(durationMin) || durationMin <= 0) throw new Error('Некорректная длительность');
+      if (!Number.isFinite(priceKop) || priceKop <= 0) throw new Error('Некорректная цена');
+
+      try {
+        await api('/teacher/me/lessons', {
+          method: 'POST',
+          body: JSON.stringify({
+            studentId,
+            subjectId,
+            startsAt: startsAt.toISOString(),
+            durationMin,
+            price: priceKop, // отправляем в копейках
+            comment: comment || null,
+          }),
+        });
+      } catch (e: any) {
+        const m = String(e?.message || '').toLowerCase();
+        // Человечный текст при нехватке средств
+        if (m.includes('insufficient') || m.includes('insufficient_funds')) {
+          throw new Error('У ученика недостаточно средств.');
+        }
+        throw e;
+      }
+
+      setMsg('Урок назначен');
+      showOk('Урок назначен.');
+      setStudentId(''); setStudentQuery(''); setSubjectId(''); setStartsAtLocal('');
+      setDuration(''); setPrice(''); setComment('');
+      await loadLessons(); // обновим списки без перезагрузки
+    } catch (e: any) {
+      const text = e?.message || 'Ошибка';
+      setErr(text);
+      showErr(text);
+    }
+  }
+
+  async function markDone(lessonId: string) {
+    setNotice(null);
+    // оптимистично переносим в "проведённые"
+    const l = upcoming.find(x => x.id === lessonId);
+    if (l) {
+      setUpcoming(prev => prev.filter(x => x.id !== lessonId));
+      setDoneList(prev => [{ ...l, status: 'DONE' }, ...prev]);
+    }
+    try {
+      await api(`/teacher/me/lessons/${lessonId}/done`, { method: 'PATCH' });
+      await loadBalance();
+      showOk('Урок проведён.');
+    } catch (e: any) {
+      await loadLessons(); // откат до серверного состояния
+      showErr(e?.message || 'Не удалось завершить урок');
+    }
+  }
+
+  async function cancelLesson(lessonId: string) {
+    setNotice(null);
+    const backup = upcoming;
+    setUpcoming(prev => prev.filter(x => x.id !== lessonId));
+    try {
+      await api(`/teacher/me/lessons/${lessonId}/cancel`, { method: 'PATCH' });
+      showOk('Урок отменён.');
+    } catch (e:any) {
+      setUpcoming(backup);
+      showErr(e?.message || 'Не удалось отменить урок');
+    }
+  }
+
+  async function createWithdraw() {
+    setNotice(null);
+    try {
+      const amountRub = parseFloat((withdrawAmount || '0').replace(',', '.'));
+      const amount = Math.round(amountRub); // на вывод — целые ₽
+      if (!amount || amount <= 0) throw new Error('Введите сумму в ₽');
+      await api('/withdrawals/teacher/me', {
+        method: 'POST',
+        body: JSON.stringify({ amount, notes: withdrawNotes || '' }),
+      });
+      showOk('Заявка на вывод отправлена.');
+      setWithdrawAmount(''); setWithdrawNotes('');
+    } catch (e: any) {
+      showErr(e?.message || 'Ошибка вывода');
+    }
+  }
 
   return (
-    <div className="p-6">
-      <div className="mb-4 rounded-xl border border-black/10 bg-white shadow-sm p-4 text-lg font-semibold">
-        {hello}
-      </div>
+    <div className="max-w-3xl mx-auto py-6 space-y-6">
+      {/* Приветствие */}
+      <section className="rounded-xl border p-4">
+        <div className="text-lg font-semibold">{hello}</div>
+      </section>
 
-      {!isTeacher && (
-        <div className="mb-4 rounded-xl border border-amber-400 bg-amber-50 text-amber-900 p-3 text-sm">
-          Учётная запись не распознана как преподаватель. Проверьте роль в профиле или войдите под учёткой преподавателя.
+      {/* Единый блок уведомлений */}
+      {notice && (
+        <section
+          className={`rounded-xl border p-3 ${notice.type === 'ok'
+            ? 'border-green-300 bg-green-50 text-green-900'
+            : 'border-red-300 bg-red-50 text-red-900'}`}
+        >
+          {notice.text}
+        </section>
+      )}
+
+      {/* Баланс */}
+      <section className="rounded-xl border p-4">
+        <div className="text-sm text-gray-500">Баланс</div>
+        <div className="text-2xl mt-1">{fmtMoney.format(Number(balance || 0))}</div>
+      </section>
+
+      {/* Назначить урок */}
+      <section className="rounded-xl border p-4">
+        <div className="font-semibold mb-3">Назначить урок</div>
+        <div className="grid md:grid-cols-2 gap-3">
+          <div className="md:col-span-2">
+            <label className="text-sm block mb-1">Ученик</label>
+            <div className="relative">
+              <input
+                className="w-full rounded border px-3 py-2"
+                value={studentQuery}
+                onChange={(e) => { setStudentQuery(e.target.value); setStudentId(''); }}
+                placeholder="Начните вводить логин / имя / телефон"
+              />
+              {studentList.length > 0 && (
+                <div className="absolute z-10 bg-white border rounded mt-1 w-full max-h-56 overflow-auto">
+                  {studentList.map(o => (
+                    <div
+                      key={o.id}
+                      className={`px-3 py-2 hover:bg-gray-100 cursor-pointer ${o.id === studentId ? 'bg-gray-100' : ''}`}
+                      onClick={() => { setStudentId(o.id); setStudentQuery(o.label); }}
+                    >
+                      {o.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm block mb-1">Предмет</label>
+            <select className="w-full rounded border px-3 py-2" value={subjectId} onChange={(e)=>setSubjectId(e.target.value)}>
+              <option value="">— выберите —</option>
+              {subjects.map(s => <option key={s.subjectId} value={s.subjectId}>{s.name}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-sm block mb-1">Начало</label>
+            <input type="datetime-local" className="w-full rounded border px-3 py-2" value={startsAtLocal} onChange={(e)=>setStartsAtLocal(e.target.value)} />
+          </div>
+
+          <div>
+            <label className="text-sm block mb-1">Длительность (мин)</label>
+            <input className="w-full rounded border px-3 py-2" value={duration} onChange={(e)=>setDuration(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-sm block mb-1">Цена (₽)</label>
+            <input className="w-full rounded border px-3 py-2" value={price} onChange={(e)=>setPrice(e.target.value)} />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="text-sm block mb-1">Комментарий</label>
+            <input className="w-full rounded border px-3 py-2" value={comment} onChange={(e)=>setComment(e.target.value)} />
+          </div>
         </div>
-      )}
+        <div className="mt-3">
+          <button className="px-3 py-2 rounded border" onClick={createLesson}>Создать</button>
+          {/* Локальные подсказки рядом с кнопкой — как в прошлой версии */}
+          {msg && <span className="text-green-700 text-sm ml-3">{msg}</span>}
+          {err && <span className="text-red-600 text-sm ml-3">{err}</span>}
+        </div>
+      </section>
 
-      {isTeacher && (
-        <>
-          {/* Назначить урок */}
-          <section className="mb-6 rounded-xl border border-black/10 bg-white shadow-sm p-4">
-            <div className="font-semibold mb-3">Назначить урок</div>
-            <form onSubmit={createLesson} className="grid grid-cols-1 gap-3 md:grid-cols-4">
-              <input
-                className="border rounded p-2"
-                placeholder="ID ученика"
-                value={form.studentId}
-                onChange={e => onForm('studentId', e.target.value)}
-                required
-              />
-              <input
-                className="border rounded p-2"
-                type="datetime-local"
-                placeholder="Начало"
-                value={form.startsAt}
-                onChange={e => onForm('startsAt', e.target.value)}
-                required
-              />
-              <input
-                className="border rounded p-2"
-                type="number"
-                placeholder="Цена, копейки (150000 = 1500₽)"
-                value={form.priceMinor}
-                onChange={e => onForm('priceMinor', e.target.value)}
-                min={0}
-                required
-              />
-              <button className="bg-black text-white rounded p-2">Назначить</button>
-            </form>
-            <div className="text-sm opacity-70 mt-2">
-              При недостаточном балансе ученика система вернёт ошибку, урок не создастся.
-            </div>
-          </section>
-
-          {/* Ближайшие уроки */}
-          <section className="rounded-xl border border-black/10 bg-white shadow-sm p-4">
-            <div className="font-semibold mb-3">Ближайшие уроки</div>
-            {items.length === 0 ? (
-              <div className="text-sm opacity-70">Нет назначенных уроков.</div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {items.map(l => (
-                  <div key={l.id} className="flex items-center justify-between border rounded p-2">
-                    <div className="flex flex-col">
-                      <span className="text-sm">
-                        Ученик: {l.student?.firstName || l.student?.login || l.studentId}
-                      </span>
-                      <span className="text-sm opacity-70">
-                        Начало: {new Date(l.startsAt).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="text-sm">
-                      {typeof l.priceMinor === 'number' ? (l.priceMinor / 100).toFixed(2) + ' ₽' : '-'}
-                    </div>
-                  </div>
-                ))}
+      {/* Предстоящие уроки */}
+      <section className="rounded-xl border p-4">
+        <div className="font-semibold mb-3">Предстоящие уроки</div>
+        {upcoming.length === 0 ? (
+          <div className="text-sm text-gray-500">Пока пусто</div>
+        ) : (
+          <div className="space-y-2">
+            {upcoming.map(l => (
+              <div key={l.id} className="rounded border px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                <div className="space-y-1">
+                  <div className="font-medium">{l.subjectName || subjects.find(s=>s.subjectId===l.subjectId)?.name || 'Предмет'}</div>
+                  <div className="text-sm text-gray-600">{studentLabel(l.student)}</div>
+                  <div className="text-sm">{fmtDate.format(new Date(l.startsAt))}</div>
+                  <div className="text-sm">{lDuration(l)} мин · {fmtMoney.format(lPriceCents(l) / 100)}</div>
+                </div>
+                <div className="flex gap-2">
+                  <button className="px-3 py-2 rounded border" onClick={()=>markDone(l.id)}>Проведён</button>
+                  <button className="px-3 py-2 rounded border" onClick={()=>cancelLesson(l.id)}>Отменить</button>
+                </div>
               </div>
-            )}
+            ))}
+          </div>
+        )}
+      </section>
 
-            {/* пагинация */}
-            <div className="flex gap-2 mt-3">
-              <button
-                className="border rounded px-3 py-1 disabled:opacity-50"
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page <= 1}
-              >Назад</button>
-              <div className="px-2 py-1 text-sm">{page} / {pages}</div>
-              <button
-                className="border rounded px-3 py-1 disabled:opacity-50"
-                onClick={() => setPage(p => Math.min(pages, p + 1))}
-                disabled={page >= pages}
-              >Вперёд</button>
-            </div>
-          </section>
-        </>
-      )}
+      {/* Проведённые */}
+      <section className="rounded-xl border p-4">
+        <div className="font-semibold mb-3">Проведённые</div>
+        {doneList.length === 0 ? (
+          <div className="text-sm text-gray-500">Пока пусто</div>
+        ) : (
+          <div className="space-y-2">
+            {doneList.map(l => (
+              <div key={l.id} className="rounded border px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                <div className="space-y-1">
+                  <div className="font-medium">{l.subjectName || subjects.find(s=>s.subjectId===l.subjectId)?.name || 'Предмет'}</div>
+                  <div className="text-sm text-gray-600">{studentLabel(l.student)}</div>
+                  <div className="text-sm">{fmtDate.format(new Date(l.startsAt))}</div>
+                  <div className="text-sm">{lDuration(l)} мин · {fmtMoney.format(lPriceCents(l) / 100)}</div>
+                </div>
+                <div className="text-xs uppercase tracking-wide text-green-700 font-semibold">DONE</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Заявка на вывод */}
+      <section className="rounded-xl border p-4">
+        <div className="font-semibold mb-3">Заявка на вывод</div>
+        <div className="grid md:grid-cols-3 gap-3">
+          <div className="md:col-span-1">
+            <label className="text-sm block mb-1">Сумма (₽)</label>
+            <input className="w-full rounded border px-3 py-2" value={withdrawAmount} onChange={(e)=>setWithdrawAmount(e.target.value)} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-sm block mb-1">Комментарий</label>
+            <input className="w-full rounded border px-3 py-2" value={withdrawNotes} onChange={(e)=>setWithdrawNotes(e.target.value)} />
+          </div>
+        </div>
+        <div className="mt-3"><button className="px-3 py-2 rounded border" onClick={createWithdraw}>Отправить</button></div>
+      </section>
     </div>
   );
 }
