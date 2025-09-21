@@ -42,7 +42,6 @@ export function useToast() {
   return ctx.toast;
 }
 
-// ---- Глобальный перехватчик fetch с безопасным кастом типов ----
 export function installFetchToasts(toast: (v:{type:'success'|'error'|'info'; message:string})=>void) {
   if (typeof window === 'undefined') return;
   const w = window as any;
@@ -58,7 +57,6 @@ export function installFetchToasts(toast: (v:{type:'success'|'error'|'info'; mes
     email_taken: 'Эта почта уже используется.',
   };
 
-  // Важно: привязываем и явно кастуем к any, чтобы TS не ругался на spread/параметры
   const orig: any = w.fetch.bind(window);
 
   w.fetch = async (input: any, init?: any) => {
@@ -71,7 +69,7 @@ export function installFetchToasts(toast: (v:{type:'success'|'error'|'info'; mes
                 : (Array.isArray(j?.message) ? j.message[0] : '');
         if (msg) toast({ type: 'error', message: HUMAN[msg] || 'Ошибка запроса' });
       }
-    } catch { /* игнор */ }
+    } catch {}
     return res;
   };
 }

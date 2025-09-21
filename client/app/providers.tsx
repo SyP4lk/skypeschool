@@ -1,4 +1,3 @@
-
 'use client';
 import { ToastProvider, useToast, installFetchToasts } from '../shared/ui/Toast';
 import React, { useEffect } from 'react';
