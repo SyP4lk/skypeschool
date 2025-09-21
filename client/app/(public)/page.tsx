@@ -11,7 +11,7 @@ import dynamicClient from 'next/dynamic';
 import styles from '../Home.module.css';
 import SubjectSearch from '../components/SubjectSearch';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import TrialRequestModal from '../components/TrialRequestModal';
 import Link from 'next/link';
 
@@ -44,6 +44,26 @@ const categories: Category[] = [
   { title: 'Китайский язык',         icon: '/icons/thumbs/kitaj_8bfrwpul7o2d_512.webp',     alt: 'Китайский язык' },
   { title: 'Информатика ЕГЭ ОГЭ',    icon: '/icons/thumbs/informatika_0c2itb0a3w01_512.webp',alt: 'Информатика ЕГЭ ОГЭ' },
 ];
+
+  // ДИНАМИЧЕСКАЯ ПОДГРУЗКА из /public/data/popular-lessons.json (аддитивно, без ломки вёрстки)
+  const [dynCategories, setDynCategories] = useState<Category[]>(categories);
+  useEffect(() => {
+    let alive = true;
+    fetch('/data/popular-lessons.json', { cache: 'no-store' })
+      .then(r => r.json())
+      .then((j) => {
+        const arr = Array.isArray(j) ? j : (Array.isArray((j as any)?.items) ? (j as any).items : []);
+        const mapped = arr.map((x: any) => ({
+          title: String(x.title || '').trim(),
+          alt: String(x.alt || x.title || '').trim(),
+          icon: String(x.icon || ''),
+        })).filter((x: any) => x.title && x.icon);
+        if (alive && mapped.length > 0) setDynCategories(mapped);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
 
 const features = [
   {
@@ -222,7 +242,7 @@ export default function HomePage() {
       
       {/* Контент поверх фона */}
       <div className={`relative z-10 grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 ${styles.cvAuto}`}>
-        {categories.map((c) => (
+        {dynCategories.map((c) => (
           <Card
   key={c.title}
   as={Link}
