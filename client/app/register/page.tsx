@@ -1,4 +1,3 @@
-
 'use client';
 import { useState } from 'react';
 
@@ -14,38 +13,45 @@ export default function RegisterPage() {
   const [messenger, setMessenger] = useState('telegram');
   const [messengerContact, setMessengerContact] = useState('');
   const [err, setErr] = useState<string|null>(null);
+  const [ok, setOk] = useState<string|null>(null);
   const [loading, setLoading] = useState(false);
-
-  function valid() {
-    return firstName && lastName && password && phone && messenger && messengerContact && (login || email);
-  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setErr(null);
-    if (!valid()) { setErr('Заполните все поля. Укажите логин или email.'); return; }
-    setLoading(true);
-    const form = new URLSearchParams();
-    if (login) form.set('login', login);
-    if (email) form.set('email', email);
-    form.set('password', password);
-    form.set('firstName', firstName);
-    form.set('lastName', lastName);
-    form.set('phone', phone.replace(/\D+/g, ''));
-    form.set('messenger', `${messenger}:${messengerContact}`);
+    setErr(null); setOk(null); setLoading(true);
     try {
-      const r = await fetch(`${API}/auth/register`, { method: 'POST', body: form, credentials: 'include' });
-      if (!r.ok) throw new Error('register_failed');
-      location.href = '/lk/student';
-    } catch {
-      setErr('Регистрация не удалась. Попробуйте позже.');
+      const body = new URLSearchParams();
+      if (firstName) body.set('firstName', firstName);
+      if (lastName) body.set('lastName', lastName);
+      if (login) body.set('login', login);
+      if (email) body.set('email', email);
+      if (password) body.set('password', password);
+      if (phone) body.set('phone', phone);
+      if (messenger) body.set('messenger', messenger);
+      if (messengerContact) body.set('messengerContact', messengerContact);
+
+      const res = await fetch(`${API}/auth/register`, {
+        method: 'POST',
+        body,
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      const text = await res.text().catch(()=>'');
+      if (!res.ok) {
+        let msg = '';
+        try { msg = JSON.parse(text)?.message || res.statusText; } catch { msg = text || res.statusText; }
+        throw new Error(msg);
+      }
+      setOk('Регистрация успешна. Вы вошли в систему.');
+    } catch (e:any) {
+      setErr(e?.message || 'Ошибка регистрации');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="max-w-md mx-auto p-6">
+    <div className="container mx-auto max-w-lg py-6">
       <h1 className="text-xl font-semibold mb-4">Регистрация</h1>
       <form onSubmit={onSubmit} className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-2">
@@ -63,16 +69,15 @@ export default function RegisterPage() {
             <option value="telegram">Telegram</option>
             <option value="whatsapp">WhatsApp</option>
             <option value="viber">Viber</option>
-            <option value="vk">VK</option>
           </select>
-          <input required placeholder="Контакт в мессенджере (@nick / +7900...)" className="border rounded p-2"
-                 value={messengerContact} onChange={e=>setMessengerContact(e.target.value)} />
+          <input placeholder="Контакт (ник/номер)" className="border rounded p-2" value={messengerContact} onChange={e=>setMessengerContact(e.target.value)} />
         </div>
-        <button disabled={loading} className="rounded bg-black text-white py-2">
-          {loading ? 'Создаём…' : 'Зарегистрироваться'}
+        <button className="px-4 py-2 rounded border bg-blue-600 text-white disabled:opacity-60" disabled={loading}>
+          {loading ? 'Отправляем…' : 'Зарегистрироваться'}
         </button>
-        {err && <div className="text-sm text-red-600">{err}</div>}
       </form>
+      {ok && <div className="mt-4 text-sm text-green-700">{ok}</div>}
+      {err && <div className="mt-2 text-sm text-red-600">{err}</div>}
     </div>
   );
 }

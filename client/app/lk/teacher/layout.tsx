@@ -11,5 +11,15 @@ export default async function Layout({ children }: { children: ReactNode }) {
     if (r === 'student') redirect('/lk/student');
     redirect('/login');
   }
-  return <>{children}</>;
+return (
+  <>
+    <div className="mb-2 text-sm">
+      {(() => {
+        const name = (me && (me.firstName || me.login)) || '';
+        return <>Здравствуйте{ name ? `, ${name}` : '' }!</>;
+      })()}
+    </div>
+    {children}
+  </>
+);
 }

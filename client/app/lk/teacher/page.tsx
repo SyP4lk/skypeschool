@@ -1,5 +1,4 @@
 'use client';
-
 import { useEffect, useMemo, useState } from 'react';
 import { api } from './_lib/api';
 
@@ -7,8 +6,6 @@ const fmtMoney = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: '
 const fmtDate = new Intl.DateTimeFormat(undefined, {
   year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
 });
-
-type Me = { id: string; login?: string | null; firstName?: string | null };
 
 type Subject = { subjectId: string; name: string; price: number; durationMin: number };
 type Lesson = {
@@ -51,23 +48,10 @@ const studentLabel = (st?: Lesson['student']) => {
 };
 
 export default function TeacherLK() {
-  // Приветствие + уведомления
-  const [me, setMe] = useState<Me | null>(null);
-  const hello =
-    me?.firstName?.trim()
-      ? `Здравствуйте, ${me.firstName}!`
-      : me?.login
-        ? `Здравствуйте, ${me.login}!`
-        : 'Здравствуйте!';
-
-  const [notice, setNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
-  const showOk = (text: string) => setNotice({ type: 'ok', text });
-  const showErr = (text: string) => setNotice({ type: 'err', text });
-
   const [balance, setBalance] = useState<number>(0);
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [err, setErr] = useState<string|null>(null);     // локальная для блока "Назначить урок"
-  const [msg, setMsg] = useState<string|null>(null);     // локальная для блока "Назначить урок"
+  const [err, setErr] = useState<string|null>(null);
+  const [msg, setMsg] = useState<string|null>(null);
 
   const [studentQuery, setStudentQuery] = useState('');
   const [studentId, setStudentId] = useState<string>('');
@@ -90,14 +74,6 @@ export default function TeacherLK() {
     [subjects, subjectId],
   );
 
-  async function loadMe() {
-    try {
-      const u = await api<Me>('/auth/me');
-      setMe(u || null);
-    } catch (_) {
-      setMe(null);
-    }
-  }
   async function loadBalance() {
     const b = await api<{ balance: number; currency: string }>('/finance/me/balance');
     setBalance(Number(b?.balance ?? 0) / 100); // копейки → ₽
@@ -123,7 +99,7 @@ export default function TeacherLK() {
 
   useEffect(() => {
     (async () => {
-      try { await Promise.all([loadMe(), loadBalance(), loadSubjects(), loadLessons()]); }
+      try { await Promise.all([loadBalance(), loadSubjects(), loadLessons()]); }
       catch (e:any) { setErr(e?.message || 'Ошибка загрузки'); }
     })();
   }, []);
@@ -148,7 +124,7 @@ export default function TeacherLK() {
   }, [studentQuery]);
 
   async function createLesson() {
-    setErr(null); setMsg(null); setNotice(null);
+    setErr(null); setMsg(null);
     try {
       if (!studentId) throw new Error('Выберите ученика');
       if (!subjectId) throw new Error('Выберите предмет');
@@ -163,41 +139,27 @@ export default function TeacherLK() {
       if (!Number.isFinite(durationMin) || durationMin <= 0) throw new Error('Некорректная длительность');
       if (!Number.isFinite(priceKop) || priceKop <= 0) throw new Error('Некорректная цена');
 
-      try {
-        await api('/teacher/me/lessons', {
-          method: 'POST',
-          body: JSON.stringify({
-            studentId,
-            subjectId,
-            startsAt: startsAt.toISOString(),
-            durationMin,
-            price: priceKop, // отправляем в копейках
-            comment: comment || null,
-          }),
-        });
-      } catch (e: any) {
-        const m = String(e?.message || '').toLowerCase();
-        // Человечный текст при нехватке средств
-        if (m.includes('insufficient') || m.includes('insufficient_funds')) {
-          throw new Error('У ученика недостаточно средств.');
-        }
-        throw e;
-      }
+      await api('/teacher/me/lessons', {
+        method: 'POST',
+        body: JSON.stringify({
+          studentId,
+          subjectId,
+          startsAt: startsAt.toISOString(),
+          durationMin,
+          price: priceKop, // отправляем в копейках
+          comment: comment || null,
+        }),
+      });
 
       setMsg('Урок назначен');
-      showOk('Урок назначен.');
       setStudentId(''); setStudentQuery(''); setSubjectId(''); setStartsAtLocal('');
       setDuration(''); setPrice(''); setComment('');
       await loadLessons(); // обновим списки без перезагрузки
-    } catch (e: any) {
-      const text = e?.message || 'Ошибка';
-      setErr(text);
-      showErr(text);
-    }
+    } catch (e: any) { setErr(e?.message || 'Ошибка'); }
   }
 
   async function markDone(lessonId: string) {
-    setNotice(null);
+    setErr(null); setMsg(null);
     // оптимистично переносим в "проведённые"
     const l = upcoming.find(x => x.id === lessonId);
     if (l) {
@@ -207,28 +169,28 @@ export default function TeacherLK() {
     try {
       await api(`/teacher/me/lessons/${lessonId}/done`, { method: 'PATCH' });
       await loadBalance();
-      showOk('Урок проведён.');
+      setMsg('Урок проведён');
     } catch (e: any) {
       await loadLessons(); // откат до серверного состояния
-      showErr(e?.message || 'Не удалось завершить урок');
+      setErr(e?.message || 'Не удалось завершить урок');
     }
   }
 
   async function cancelLesson(lessonId: string) {
-    setNotice(null);
+    setErr(null); setMsg(null);
     const backup = upcoming;
     setUpcoming(prev => prev.filter(x => x.id !== lessonId));
     try {
       await api(`/teacher/me/lessons/${lessonId}/cancel`, { method: 'PATCH' });
-      showOk('Урок отменён.');
+      setMsg('Урок отменён');
     } catch (e:any) {
       setUpcoming(backup);
-      showErr(e?.message || 'Не удалось отменить урок');
+      setErr(e?.message || 'Не удалось отменить урок');
     }
   }
 
   async function createWithdraw() {
-    setNotice(null);
+    setErr(null); setMsg(null);
     try {
       const amountRub = parseFloat((withdrawAmount || '0').replace(',', '.'));
       const amount = Math.round(amountRub); // на вывод — целые ₽
@@ -237,38 +199,17 @@ export default function TeacherLK() {
         method: 'POST',
         body: JSON.stringify({ amount, notes: withdrawNotes || '' }),
       });
-      showOk('Заявка на вывод отправлена.');
-      setWithdrawAmount(''); setWithdrawNotes('');
-    } catch (e: any) {
-      showErr(e?.message || 'Ошибка вывода');
-    }
+      setMsg('Заявка отправлена'); setWithdrawAmount(''); setWithdrawNotes('');
+    } catch (e: any) { setErr(e?.message || 'Ошибка вывода'); }
   }
 
   return (
     <div className="max-w-3xl mx-auto py-6 space-y-6">
-      {/* Приветствие */}
-      <section className="rounded-xl border p-4">
-        <div className="text-lg font-semibold">{hello}</div>
-      </section>
-
-      {/* Единый блок уведомлений */}
-      {notice && (
-        <section
-          className={`rounded-xl border p-3 ${notice.type === 'ok'
-            ? 'border-green-300 bg-green-50 text-green-900'
-            : 'border-red-300 bg-red-50 text-red-900'}`}
-        >
-          {notice.text}
-        </section>
-      )}
-
-      {/* Баланс */}
       <section className="rounded-xl border p-4">
         <div className="text-sm text-gray-500">Баланс</div>
         <div className="text-2xl mt-1">{fmtMoney.format(Number(balance || 0))}</div>
       </section>
 
-      {/* Назначить урок */}
       <section className="rounded-xl border p-4">
         <div className="font-semibold mb-3">Назначить урок</div>
         <div className="grid md:grid-cols-2 gap-3">
@@ -326,7 +267,6 @@ export default function TeacherLK() {
         </div>
         <div className="mt-3">
           <button className="px-3 py-2 rounded border" onClick={createLesson}>Создать</button>
-          {/* Локальные подсказки рядом с кнопкой — как в прошлой версии */}
           {msg && <span className="text-green-700 text-sm ml-3">{msg}</span>}
           {err && <span className="text-red-600 text-sm ml-3">{err}</span>}
         </div>
@@ -379,7 +319,6 @@ export default function TeacherLK() {
         )}
       </section>
 
-      {/* Заявка на вывод */}
       <section className="rounded-xl border p-4">
         <div className="font-semibold mb-3">Заявка на вывод</div>
         <div className="grid md:grid-cols-3 gap-3">

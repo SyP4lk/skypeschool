@@ -63,7 +63,9 @@ export default function CreateLessonForm() {
       setMsg('Урок назначен');
       setStudentId(''); setSubjectId(''); setStartsAt(''); setDuration(''); setPrice(''); setNote('');
     } catch (e:any) {
-      setErr(e?.message || 'Ошибка');
+      const m = String(e?.message || '');
+      if (m === 'insufficient_funds') setErr('У ученика недостаточно средств.');
+      else setErr(m || 'Ошибка');
     }
   }
 

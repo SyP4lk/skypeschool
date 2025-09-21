@@ -1,4 +1,3 @@
-
 import { BadRequestException, Body, Controller, Post, Req } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 
@@ -13,34 +12,32 @@ export class TeacherLessonsController {
     if (!teacherId) throw new BadRequestException('unauthorized');
     if (!studentId) throw new BadRequestException('studentId_required');
 
-    const priceMinor =
-      (dto?.priceMinor != null && Number.isFinite(Number(dto.priceMinor)))
-        ? Number(dto.priceMinor)
-        : (dto?.price != null && Number.isFinite(Number(dto.price)))
-          ? Math.round(Number(dto.price) * 100)
-          : 0;
+    const priceCandidate = Number((dto && (dto.priceMinor ?? dto.price)) ?? NaN);
+    const priceMinor = Number.isFinite(priceCandidate) ? priceCandidate : undefined;
 
-    let balance = 0;
+    // Balance check — additive and optional
     try {
-      const s = await this.prisma.user.findUnique({ where: { id: studentId }, select: { balance: true } as any } as any);
-      balance = Number(s?.balance || 0);
-    } catch {}
-
-    if (priceMinor > 0 && balance < priceMinor) {
-      throw new BadRequestException({ message: 'insufficient_funds' });
+      const student = await (this.prisma as any).user.findUnique({
+        where: { id: studentId },
+        select: { balance: true },
+      } as any);
+      const balanceMinor = Number(student?.balance);
+      if (Number.isFinite(balanceMinor) && Number.isFinite(priceCandidate)) {
+        if (balanceMinor < priceCandidate) {
+          throw new BadRequestException({ message: 'insufficient_funds' });
+        }
+      }
+    } catch (e) {
+      if (String((e as any)?.message || '').includes('insufficient_funds')) throw e;
+      // else silently ignore schema differences
     }
 
     const startsAt = dto?.startsAt ? new Date(dto.startsAt) : new Date();
-    const lesson = await this.prisma.lesson.create({
-      data: {
-        teacherId,
-        studentId,
-        startsAt,
-        status: 'scheduled',
-        ...(Number.isFinite(priceMinor) ? { priceMinor } : {}),
-      },
-    } as any);
+    const data: any = { teacherId, studentId, startsAt, status: 'scheduled' };
+    if (Number.isFinite(priceMinor)) data.priceMinor = priceMinor;
+    if (dto?.durationMin != null) data.duration = Number(dto.durationMin);
 
+    const lesson = await (this.prisma as any).lesson.create({ data } as any);
     return { lesson };
   }
 }

@@ -1,116 +1,68 @@
 'use client';
-
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 const API = (process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/$/, '');
 
-type Me = { id: string; role?: string | null; login?: string | null; firstName?: string | null };
-
-function normRole(v: string | null | undefined): 'student' | 'teacher' | 'admin' | 'other' {
-  const s = String(v ?? '').trim().toLowerCase();
-  if (['teacher', 'преподаватель', 'teach', 't'].includes(s)) return 'teacher';
-  if (['student', 'ученик', 'stud', 's'].includes(s)) return 'student';
-  if (['admin', 'administrator', 'a'].includes(s)) return 'admin';
-  return 'other';
-}
-
 export default function LoginPage() {
   const router = useRouter();
-  const [loginOrEmail, setLoginOrEmail] = useState('');
+  const [ident, setIdent] = useState('');
   const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string|null>(null);
 
-  // На всякий случай удаляем возможную "клиентскую" token-куку (серверную HttpOnly это не тронет)
-  useEffect(() => {
-    try { document.cookie = 'token=; Path=/; Max-Age=0; SameSite=None; Secure'; } catch {}
-  }, []);
-
-  const onSubmit = useCallback(async (e: React.FormEvent) => {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-
-    if (!loginOrEmail || !password) {
-      setError('Введите логин или email и пароль.');
-      return;
-    }
-
-    setBusy(true);
+    setErr(null); setLoading(true);
     try {
-      // прогрев бекенда (не ждём)
-      fetch(API.replace(/\/api$/, ''), { credentials: 'include' }).catch(() => {});
-
-      // urlencoded без явного Content-Type — чтобы не ловить preflight на Render
       const body = new URLSearchParams();
-      body.append('loginOrEmail', loginOrEmail);
-      body.append('password', password);
-
-      const r = await fetch(`${API}/auth/login`, {
+      body.set('loginOrEmail', ident);
+      body.set('password', password);
+      const res = await fetch(`${API}/auth/login`, {
         method: 'POST',
         body,
         credentials: 'include',
+        cache: 'no-store',
       });
-
-      if (!r.ok) {
-        setError('Неверный логин или пароль.');
-        return;
+      const text = await res.text().catch(()=>'');
+      if (!res.ok) {
+        let msg = '';
+        try { msg = JSON.parse(text)?.message || res.statusText; } catch { msg = text || res.statusText; }
+        throw new Error(msg);
       }
-
-      const meRes = await fetch(`${API}/auth/me`, { credentials: 'include' });
-      if (!meRes.ok) {
-        setError('Не удалось получить профиль. Попробуйте ещё раз.');
-        return;
-      }
-      const me: Me = await meRes.json();
-      const role = normRole(me?.role);
-
-      if (role === 'admin') router.replace('/admin');
-      else if (role === 'teacher') router.replace('/lk/teacher');
-      else router.replace('/lk/student'); // по умолчанию студент
-    } catch {
-      setError('Не удалось войти. Попробуйте позже.');
+      const me = await fetch(`${API}/auth/me`, { credentials: 'include', cache: 'no-store' }).then(r=>r.json());
+      const role = String(me?.role || '').toLowerCase();
+      if (role === 'admin') router.push('/admin');
+      else if (role === 'teacher') router.push('/lk/teacher');
+      else router.push('/lk/student');
+    } catch (e:any) {
+      setErr(e?.message || 'Ошибка входа');
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
-  }, [loginOrEmail, password, router]);
+  }
 
   return (
-    <div className="min-h-[60vh] flex items-start justify-center">
-      <div className="w-full max-w-md p-6">
-        <h1 className="text-2xl font-semibold mb-4">Вход</h1>
-
-        <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          <input
-            name="loginOrEmail"
-            value={loginOrEmail}
-            onChange={e => setLoginOrEmail(e.target.value)}
-            className="border rounded px-3 py-2"
-            placeholder="Логин или Email"
-            autoComplete="username"
-          />
-
-          <input
-            name="password"
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            className="border rounded px-3 py-2"
-            placeholder="Пароль"
-            autoComplete="current-password"
-          />
-
-          <button
-            type="submit"
-            disabled={busy}
-            className="mt-2 rounded px-4 py-2 bg-black text-white disabled:opacity-60"
-          >
-            {busy ? 'Входим…' : 'Войти'}
-          </button>
-
-          {error && <div className="text-red-600 text-sm">{error}</div>}
-        </form>
+    <div className="container mx-auto max-w-md py-6">
+      <h1 className="text-xl font-semibold mb-4">Вход</h1>
+      <form onSubmit={onSubmit} className="flex flex-col gap-3">
+        <div>
+          <label className="text-sm block mb-1">Логин / Email / Телефон</label>
+          <input className="w-full rounded border px-3 py-2" value={ident} onChange={e=>setIdent(e.target.value)} required />
+        </div>
+        <div>
+          <label className="text-sm block mb-1">Пароль</label>
+          <input type="password" className="w-full rounded border px-3 py-2" value={password} onChange={e=>setPassword(e.target.value)} required />
+        </div>
+        <button className="px-4 py-2 rounded border bg-blue-600 text-white disabled:opacity-60" disabled={loading}>
+          {loading ? 'Входим…' : 'Войти'}
+        </button>
+      </form>
+      <div className="mt-4 text-sm">
+        Нет аккаунта? <a href="/register" className="text-blue-600 hover:underline">Зарегистрироваться</a>
       </div>
+      {err && <div className="mt-4 text-sm text-red-600">{err}</div>}
     </div>
   );
 }

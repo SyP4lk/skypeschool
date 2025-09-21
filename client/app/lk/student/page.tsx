@@ -1,189 +1,154 @@
 'use client';
+import { useEffect, useMemo, useState } from 'react';
+import { api } from './_lib/api';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000;
 
-const API = (process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/$/, '');
-
-type RawRole = string | null | undefined;
-type Me = {
-  id: string;
-  role?: RawRole;
-  login?: string|null;
-  firstName?: string|null;
-};
+const fmtMoney = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' });
+const fmtDate = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+});
 
 type Lesson = {
   id: string;
-  studentId: string;
-  teacherId: string;
   startsAt: string;
-  status: 'scheduled'|'done'|'canceled_by_student'|'canceled_by_teacher'|string;
-  teacher?: { id: string; login?: string|null; firstName?: string|null } | null;
-  priceMinor?: number|null;
+  duration?: number | null;
+  durationMin?: number | null;
+  price?: number | null; // в копейках
+  status?: string | null;
+  teacher?: { id: string; login?: string | null; firstName?: string | null; lastName?: string | null } | null;
+  subjectName?: string | null;
+  subjectId?: string | null;
+  comment?: string | null;
 };
 
-function normRole(v: RawRole): 'teacher'|'student'|'admin'|'other' {
-  const s = String(v ?? '').trim().toLowerCase();
-  if (['teacher', 'преподаватель', 'teach', 't'].includes(s)) return 'teacher';
-  if (['student', 'ученик', 'stud', 's'].includes(s)) return 'student';
-  if (['admin', 'administrator', 'a'].includes(s)) return 'admin';
-  return 'other';
+function normalizeStatus(s?: string | null) {
+  const v = String(s || '').toUpperCase();
+  if (v.includes('DONE') || v.includes('COMPLETE')) return 'DONE';
+  if (v.includes('CANCEL')) return 'CANCELED';
+  if (v.includes('PLAN')) return 'PLANNED';
+  return v || 'PLANNED';
 }
+const lDuration = (l: Lesson) => Number(l.durationMin ?? l.duration ?? 60);
+const lPriceRub = (l: Lesson) => Number(l.price ?? 0) / 100;
+const teacherLabel = (t?: Lesson['teacher']) => {
+  if (!t) return '';
+  const fio = [t.lastName, t.firstName].filter(Boolean).join(' ');
+  return [t.login, fio].filter(Boolean).join(' — ');
+};
 
 export default function StudentLK() {
-  const [me, setMe] = useState<Me | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [balance, setBalance] = useState<number>(0);
+  const [err, setErr] = useState<string|null>(null);
+  const [msg, setMsg] = useState<string|null>(null);
 
-  // список ближайших уроков
-  const [page, setPage] = useState(1);
-  const [limit] = useState(10);
-  const [items, setItems] = useState<Lesson[]>([]);
-  const [total, setTotal] = useState(0);
-  const pages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
+  const [upcoming, setUpcoming] = useState<Lesson[]>([]);
+  const [doneList, setDoneList] = useState<Lesson[]>([]);
+  const [topupText, setTopupText] = useState<string>('');
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        fetch(API.replace(/\/api$/, ''), { credentials: 'include' }).catch(() => {});
-        const r = await fetch(`${API}/auth/me`, { credentials: 'include' });
-        if (!r.ok) throw new Error('unauthorized');
-        const u: Me = await r.json();
-        if (cancelled) return;
-        setMe(u);
-      } catch {
-        setMe(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const role = normRole(me?.role);
-  const isStudent = role === 'student';
-
-  const [busy, setBusy] = useState(false);
-
-  const loadLessons = useCallback(async (toPage = page) => {
-    if (!isStudent) { setItems([]); setTotal(0); return; }
-    const r = await fetch(`${API}/student/me/lessons?status=upcoming&page=${toPage}&limit=${limit}`, {
-      credentials: 'include',
-    });
-    if (!r.ok) { setItems([]); setTotal(0); return; }
-    const j = await r.json();
-    setItems(Array.isArray(j?.items) ? j.items : (Array.isArray(j) ? j : []));
-    setTotal(typeof j?.total === 'number' ? j.total : (Array.isArray(j) ? j.length : 0));
-  }, [limit, page, isStudent]);
-
-  useEffect(() => {
-    if (!me?.id) return;
-    loadLessons(page).catch(() => {});
-  }, [me?.id, page, loadLessons]);
-
-  async function cancelLesson(id: string) {
-    if (!isStudent) return;
-    setBusy(true);
+  async function loadBalance() {
+    const b = await api<{ balance: number; currency: string }>('/finance/me/balance');
+    setBalance(Number(b?.balance ?? 0) / 100); // копейки → ₽
+  }
+  async function loadLessons() {
+    const rows = await api<Lesson[]>('/student/me/lessons');
+    const norm = (Array.isArray(rows) ? rows : []).map(l => ({ ...l, status: normalizeStatus(l.status) }));
+    setUpcoming(norm.filter(l => l.status !== 'DONE' && l.status !== 'CANCELED').sort((a,b)=>+new Date(a.startsAt)-+new Date(b.startsAt)));
+    setDoneList(norm.filter(l => l.status === 'DONE').sort((a,b)=>+new Date(b.startsAt)-+new Date(a.startsAt)));
+  }
+  async function loadTopupText() {
     try {
-      const body = new URLSearchParams();
-      const r = await fetch(`${API}/student/me/lessons/${id}/cancel`, {
-        method: 'POST',
-        credentials: 'include',
-        body, // без Content-Type
-      });
-      if (r.ok) {
-        alert('Урок отменён.');
-        await loadLessons(1);
-        setPage(1);
-        return;
-      }
-      let msg = 'Не удалось отменить урок.';
-      try {
-        const j = await r.json();
-        if (j?.message === 'too_late_to_cancel') msg = 'Слишком поздно для отмены урока.';
-      } catch {}
-      alert(msg);
-    } finally {
-      setBusy(false);
-    }
+      const r = await api<{ text?: string }>('/student/me/topup-text');
+      setTopupText(String(r?.text || ''));
+    } catch { setTopupText(''); }
   }
 
-  const hello =
-    me?.firstName?.trim()
-      ? `Здравствуйте, ${me.firstName}!`
-      : me?.login
-        ? `Здравствуйте, ${me.login}!`
-        : 'Здравствуйте!';
+const [msg, setMsg] = useState<string|null>(null);
+const [err, setErr] = useState<string|null>(null);
 
-  if (loading) return <div className="p-6">Загрузка…</div>;
-  if (!me) return <div className="p-6">Не авторизован. Войдите, пожалуйста.</div>;
+function canCancel(startsAt: string) {
+  try { return (new Date(startsAt).getTime() - Date.now()) >= EIGHT_HOURS_MS; } catch { return false; }
+}
+async function cancelLesson(id: string) {
+  setErr(null); setMsg(null);
+  try {
+    await api(`/student/me/lessons/${id}/cancel`, { method: 'POST' });
+    setMsg('Урок отменён');
+    await loadLessons?.();
+  } catch (e:any) {
+    const m = String(e?.message || '');
+    if (m === 'too_late_to_cancel') setErr('Отменить можно не позднее чем за 8 часов до начала');
+    else setErr(m || 'Ошибка отмены');
+  }
+}
+
+useEffect(() => {
+    (async () => {
+      try { await Promise.all([loadBalance(), loadLessons(), loadTopupText()]); }
+      catch (e:any) { setErr(e?.message || 'Ошибка загрузки'); }
+    })();
+  }, []);
 
   return (
-    <div className="p-6">
-      <div className="mb-4 rounded-xl border border-black/10 bg-white shadow-sm p-4 text-lg font-semibold">
-        {hello}
-      </div>
+    <div className="max-w-3xl mx-auto py-6 space-y-6">
+      <section className="rounded-xl border p-4">
+        <div className="text-sm text-gray-500">Баланс</div>
+        <div className="text-2xl mt-1">{fmtMoney.format(Number(balance || 0))}</div>
+      </section>
 
-      {!isStudent && (
-        <div className="mb-4 rounded-xl border border-amber-400 bg-amber-50 text-amber-900 p-3 text-sm">
-          Учётная запись не распознана как ученик. Проверьте роль в профиле или войдите под учёткой ученика.
-        </div>
-      )}
-
-      {isStudent && (
-        <section className="rounded-xl border border-black/10 bg-white shadow-sm p-4">
-          <div className="font-semibold mb-3">Ближайшие уроки</div>
-          {items.length === 0 ? (
-            <div className="text-sm opacity-70">Нет назначенных уроков.</div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {items.map(l => {
-                const starts = new Date(l.startsAt);
-                const canCancel = starts.getTime() - Date.now() >= 8 * 3_600_000 && l.status === 'scheduled';
-                return (
-                  <div key={l.id} className="flex items-center justify-between border rounded p-2">
-                    <div className="flex flex-col">
-                      <span className="text-sm">
-                        Преподаватель: {l.teacher?.firstName || l.teacher?.login || l.teacherId}
-                      </span>
-                      <span className="text-sm opacity-70">
-                        Начало: {starts.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="text-sm">
-                        {typeof l.priceMinor === 'number' ? (l.priceMinor / 100).toFixed(2) + ' ₽' : '-'}
-                      </div>
-                      <button
-                        className="border rounded px-3 py-1 disabled:opacity-50"
-                        onClick={() => cancelLesson(l.id)}
-                        disabled={!canCancel || busy}
-                        title={canCancel ? '' : 'Отмена доступна не позднее чем за 8 часов до начала'}
-                      >
-                        Отменить
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="flex gap-2 mt-3">
-            <button
-              className="border rounded px-3 py-1 disabled:opacity-50"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page <= 1}
-            >Назад</button>
-            <div className="px-2 py-1 text-sm">{page} / {pages}</div>
-            <button
-              className="border rounded px-3 py-1 disabled:opacity-50"
-              onClick={() => setPage(p => Math.min(pages, p + 1))}
-              disabled={page >= pages}
-            >Вперёд</button>
+      <section className="rounded-xl border p-4">
+        <div className="font-semibold mb-3">Предстоящие уроки</div>
+        {upcoming.length === 0 ? (
+          <div className="text-sm text-gray-500">Пока пусто</div>
+        ) : (
+          <div className="space-y-2">
+            {upcoming.map(l => (
+              <div key={l.id} className="rounded border px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                <div className="space-y-1">
+                  <div className="font-medium">{l.subjectName || 'Предмет'}</div>
+                  <div className="text-sm text-gray-600">{teacherLabel(l.teacher)}</div>
+                  <div className="text-sm">{fmtDate.format(new Date(l.startsAt))}{' '}{canCancel(l.startsAt) && (<button className="px-2 py-1 rounded border text-xs" onClick={()=>cancelLesson(l.id)}>Отменить</button>)}</div>
+                  <div className="text-sm">{lDuration(l)} мин · {fmtMoney.format(lPriceRub(l))}</div>
+                  {l.comment ? <div className="text-xs text-gray-500">Комментарий: {l.comment}</div> : null}
+                </div>
+              </div>
+            ))}
           </div>
-        </section>
-      )}
+        )}
+      </section>
+
+      <section className="rounded-xl border p-4">
+        <div className="font-semibold mb-3">Проведённые</div>
+        {doneList.length === 0 ? (
+          <div className="text-sm text-gray-500">Пока пусто</div>
+        ) : (
+          <div className="space-y-2">
+            {doneList.map(l => (
+              <div key={l.id} className="rounded border px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                <div className="space-y-1">
+                  <div className="font-medium">{l.subjectName || 'Предмет'}</div>
+                  <div className="text-sm text-gray-600">{teacherLabel(l.teacher)}</div>
+                  <div className="text-sm">{fmtDate.format(new Date(l.startsAt))}{' '}{canCancel(l.startsAt) && (<button className="px-2 py-1 rounded border text-xs" onClick={()=>cancelLesson(l.id)}>Отменить</button>)}</div>
+                  <div className="text-sm">{lDuration(l)} мин · {fmtMoney.format(lPriceRub(l))}</div>
+                </div>
+                <div className="text-xs uppercase tracking-wide text-green-700 font-semibold">DONE</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border p-4">
+        <div className="font-semibold mb-3">Как пополнить</div>
+        {topupText ? (
+          <pre className="whitespace-pre-wrap text-sm leading-6">{topupText}</pre>
+        ) : (
+          <div className="text-sm text-gray-500">Инструкция пока не добавлена.</div>
+        )}
+      </section>
+
+      {msg && <div className="text-sm text-green-700 mb-2">{msg}</div>}
+      {err && <div className="text-sm text-red-600">{err}</div>}
     </div>
   );
 }
