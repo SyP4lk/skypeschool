@@ -34,35 +34,50 @@ export default function SupportWidget() {
   const canSend = useMemo(() => text.trim().length > 0, [text]);
   const toggle = () => setOpen(v => !v);
 
-  const send = useCallback(async () => {
-    if (!canSend || sending) return;
-    setSending(true); setErr(null); setOk(null);
+const send = useCallback(async () => {
+  if (!canSend || sending) return;
+  setSending(true); setErr(null); setOk(null);
 
-    const userMsg: LocalMsg = { id: uid(), role: 'user', text: text.trim(), createdAt: Date.now() };
-    setMsgs(m => [...m, userMsg]); setText('');
+  const userMsg: LocalMsg = { id: uid(), role: 'user', text: text.trim(), createdAt: Date.now() };
+  setMsgs(m => [...m, userMsg]); setText('');
 
-    const base = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/+$/, '');
-    const payload: TrialReqPayload = { message: userMsg.text };
-    if (name.trim()) payload.name = name.trim();
-    if (contact.trim()) contact.includes('@') ? (payload.email = contact.trim()) : (payload.phone = contact.trim());
+  const base = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/+$/, '');
+  const payload: any = { message: userMsg.text, name: name.trim() || undefined };
+  if (contact.trim()) contact.includes('@') ? (payload.email = contact.trim()) : (payload.phone = contact.trim());
 
-    async function post(url: string) {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-      const raw = await res.text();
-      if (!res.ok) { try { const j = JSON.parse(raw); throw new Error(j?.message || raw || res.statusText); }
-        catch { throw new Error(raw || res.statusText); } }
+  // Пытаемся в поддержку -> затем фолбэк в старые ручки
+  const endpoints = [
+    `${base}/support`,
+    `${base}/support-requests`, // если вдруг так назвали
+    `${base}/trials`,
+    `${base}/trial-requests`,
+  ];
+
+  async function trySend(url: string) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+    const raw = await res.text();
+    if (!res.ok) {
+      try { const j = JSON.parse(raw); throw new Error(j?.message || raw || res.statusText); }
+      catch { throw new Error(raw || res.statusText); }
     }
+  }
 
-    try { await post(`${base}/trials`); setOk('Сообщение отправлено. Мы свяжемся с вами.'); }
-    catch (e1: any) { try { await post(`${base}/trial-requests`); setOk('Сообщение отправлено.'); }
-      catch (e2: any) { setErr(e2?.message || e1?.message || 'Не удалось отправить. Попробуйте позже.'); } }
-    finally { setSending(false); }
-  }, [canSend, sending, text, name, contact]);
+  let lastErr: any = null;
+  for (const url of endpoints) {
+    try { await trySend(url); lastErr = null; break; }
+    catch (e) { lastErr = e; }
+  }
+  if (lastErr) setErr((lastErr as any)?.message || 'Не удалось отправить. Попробуйте позже.');
+  else setOk('Сообщение отправлено. Мы свяжемся с вами.');
+
+  setSending(false);
+}, [canSend, sending, text, name, contact]);
+
 
   const springTransition: Transition = { type: 'spring', bounce: 0.28, duration: 0.5 };
   const instantTransition: Transition = { duration: 0 };

@@ -14,6 +14,7 @@ import { ArticlesModule } from './modules/articles/articles.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { WithdrawalsModule } from './modules/withdrawals/withdrawals.module';
+import { SupportModule } from './modules/support/support.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { WithdrawalsModule } from './modules/withdrawals/withdrawals.module';
     FinanceModule,
     SettingsModule,
     WithdrawalsModule,
+    SupportModule,
   ],
 })
 export class AppModule {}
