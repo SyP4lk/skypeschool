@@ -42,7 +42,7 @@ export function useToast() {
   return ctx.toast;
 }
 
-// перехватчик fetch с мягкими типами
+// Глобальный перехватчик fetch (с нормальными регекспами)
 export function installFetchToasts(toast: (v:{type:'success'|'error'|'info'; message:string})=>void) {
   if (typeof window === 'undefined') return;
   const w = window as any;
@@ -66,19 +66,19 @@ export function installFetchToasts(toast: (v:{type:'success'|'error'|'info'; mes
 
     const res: Response = await orig(input, init);
 
-    // успехи, если нужно
+    // Успехи
     try {
       if (res.ok) {
-        if (method === 'POST' && /\\/student\\/me\\/lessons\\/[^/]+\\/cancel$/.test(url)) {
+        if (method === 'POST' && /\/student\/me\/lessons\/[^/]+\/cancel$/.test(url)) {
           toast({ type: 'success', message: 'Урок отменён.' });
         }
-        if (method === 'POST' && /\\/teacher\\/me\\/lessons$/.test(url)) {
+        if (method === 'POST' && /\/teacher\/me\/lessons$/.test(url)) {
           toast({ type: 'success', message: 'Урок назначен.' });
         }
       }
     } catch {}
 
-    // ошибки
+    // Ошибки
     try {
       const ct = res.headers.get('content-type') || '';
       if (!res.ok && ct.includes('application/json')) {
