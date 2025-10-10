@@ -8,12 +8,16 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 
-// ВАЖНО: дефолт + именованный импорт
-import multer, { diskStorage } from 'multer';
+// Без esModuleInterop: namespace-импорт
+import * as MulterNS from 'multer';
 
 import type { Request } from 'express';
 import { existsSync, mkdirSync } from 'fs';
 import { join, extname } from 'path';
+
+// Нормализация доступа к runtime-объекту multer
+// (в некоторых сборках он лежит в .default, в типах нет diskStorage)
+const multer: any = (MulterNS as any).default ?? (MulterNS as any);
 
 // допустимые расширения
 function safeExt(original: string) {
@@ -27,7 +31,8 @@ export class UploadController {
   @Post(':id/photo')
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
+      // Явный any из-за несовпадения d.ts: на рантайме diskStorage есть
+      storage: (multer as any).diskStorage({
         destination: (
           _req: Request,
           _file: Express.Multer.File,
@@ -48,8 +53,8 @@ export class UploadController {
         },
       }),
 
-      // Без жёстких типов (совместимо со всеми версиями типов Multer)
-      fileFilter: (_req, file, cb) => {
+      // fileFilter: без строгих сигнатур — совместимо с любыми типами
+      fileFilter: (_req: Request, file: Express.Multer.File, cb: any) => {
         const ok = /image\/(jpe?g|png|webp|gif)/i.test(file.mimetype);
         cb(null, ok);
       },
