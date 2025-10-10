@@ -27,7 +27,17 @@ enum LessonChannel {
   telegram
   other
 }
+model Pricing {
+  id           String   @id @default(uuid())
+  teacherId    String
+  subjectId    String
+  teacherPrice Int      // цена учителю (копейки)
+  publicPrice  Int      // цена для ученика (копейки)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
+  @@unique([teacherId, subjectId], name: "pricing_unique_pair")
+}
 /**
  * Типы финансовых операций для журнала.
  * (Журнал остаётся в BalanceChange, просто добавили type/meta)
@@ -184,6 +194,7 @@ model Lesson {
    * при изменении тарифов у преподавателя.
    */
   price       Int?
+  publicPriceAtCharge Int?
 
   @@index([teacherId, startsAt])
   @@index([studentId, startsAt])
@@ -272,3 +283,6 @@ model Setting {
   key   String @id
   value String
 }
+
+
+

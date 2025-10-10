@@ -1,0 +1,9 @@
+// PATCH: 2025-09-28
+
+Папка для загрузок преподавателей: server/uploads/teachers
+В AppModule добавьте (если отсутствует) ServeStaticModule:
+  ServeStaticModule.forRoot({
+    rootPath: join(process.cwd(), 'uploads'),
+    serveRoot: '/uploads',
+  })
+NB: process.cwd() указывает на корень сервера (server/ при запуске).

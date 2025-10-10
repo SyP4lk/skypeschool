@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { FinanceService } from './finance.service';
 import { FinanceMeController } from './finance.me.controller';
+import { AdminFinanceProfitController } from './admin-profit.controller';
 
 const extraControllers: any[] = [];
 try { const m = require('./finance.controller'); if (m?.FinanceController) extraControllers.push(m.FinanceController); } catch {}
@@ -10,7 +11,7 @@ try { const m = require('./admin.withdrawals.controller'); if (m?.AdminWithdrawa
 try { const m = require('./withdrawals.controller'); if (m?.TeacherWithdrawalsController) extraControllers.push(m.TeacherWithdrawalsController); } catch {}
 
 @Module({
-  controllers: [...extraControllers, FinanceMeController],
+  controllers: [...extraControllers, FinanceMeController, AdminFinanceProfitController],
   providers: [PrismaService, FinanceService],
 })
 export class FinanceModule {}

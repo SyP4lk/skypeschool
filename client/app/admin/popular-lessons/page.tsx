@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
@@ -6,6 +5,8 @@ import { NotifyCenter } from '@/shared/ui/NotifyCenter';
 import { notify } from '@/shared/ui/notify';
 
 type Item = { id: string; title: string; alt: string; icon: string; order?: number };
+
+const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
 
 export default function PopularLessonsAdmin() {
   const [items, setItems] = useState<Item[]>([]);
@@ -15,25 +16,28 @@ export default function PopularLessonsAdmin() {
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   async function load() {
-    const r = await fetch('/api/popular-lessons', { cache: 'no-store' });
+    const r = await fetch(`${API}/popular-lessons`, { cache: 'no-store' });
     const j = await r.json();
     setItems(Array.isArray(j.items) ? j.items : []);
   }
 
-  useEffect(() => { load().catch(()=>{}); }, []);
+  useEffect(() => { void load(); }, []);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
     try {
       if (!title.trim()) throw new Error('Укажите название предмета');
       if (!fileRef.current?.files?.[0]) throw new Error('Выберите изображение');
+
       const fd = new FormData();
       fd.set('title', title.trim());
       fd.set('alt', (alt || title).trim());
       if (order !== '') fd.set('order', String(order));
       fd.set('file', fileRef.current.files[0]);
-      const r = await fetch('/api/popular-lessons', { method: 'POST', body: fd });
+
+      const r = await fetch(`${API}/popular-lessons`, { method: 'POST', body: fd });
       if (!r.ok) throw new Error(await r.text());
+
       notify('Добавлено', 'success');
       setTitle(''); setAlt(''); setOrder('');
       if (fileRef.current) fileRef.current.value = '';
@@ -45,36 +49,42 @@ export default function PopularLessonsAdmin() {
 
   async function updateOrder(id: string, ord: number) {
     try {
-      const r = await fetch('/api/popular-lessons', {
+      const r = await fetch(`${API}/popular-lessons`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, order: ord }),
       });
       if (!r.ok) throw new Error(await r.text());
       await load();
-    } catch (e: any) { notify(e?.message || 'Ошибка сохранения', 'error'); }
+    } catch (e: any) {
+      notify(e?.message || 'Ошибка сохранения', 'error');
+    }
   }
 
   async function rename(id: string, newTitle: string) {
     try {
-      const r = await fetch('/api/popular-lessons', {
+      const r = await fetch(`${API}/popular-lessons`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, title: newTitle }),
       });
       if (!r.ok) throw new Error(await r.text());
       await load();
-    } catch (e: any) { notify(e?.message || 'Ошибка сохранения', 'error'); }
+    } catch (e: any) {
+      notify(e?.message || 'Ошибка сохранения', 'error');
+    }
   }
 
   async function del(id: string) {
     if (!confirm('Удалить карточку?')) return;
     try {
-      const r = await fetch(`/api/popular-lessons?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const r = await fetch(`${API}/popular-lessons?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!r.ok) throw new Error(await r.text());
       notify('Удалено', 'success');
       await load();
-    } catch (e: any) { notify(e?.message || 'Ошибка удаления', 'error'); }
+    } catch (e: any) {
+      notify(e?.message || 'Ошибка удаления', 'error');
+    }
   }
 
   return (
@@ -93,7 +103,13 @@ export default function PopularLessonsAdmin() {
           </div>
           <div>
             <label className="text-sm block mb-1">Порядок (опц.)</label>
-            <input className="w-full rounded border px-3 py-2" value={order} onChange={e=>setOrder(e.target.value ? Number(e.target.value) : '')} placeholder="0" />
+            <input
+              className="w-full rounded border px-3 py-2"
+              value={order}
+              onChange={e=>setOrder(e.target.value ? Number(e.target.value) : '')}
+              placeholder="0"
+              inputMode="numeric"
+            />
           </div>
           <div className="md:col-span-2">
             <label className="text-sm block mb-1">Изображение (jpg/png/webp)</label>
@@ -125,6 +141,7 @@ export default function PopularLessonsAdmin() {
                       className="w-20 rounded border px-2 py-1"
                       defaultValue={String(it.order ?? 0)}
                       onBlur={e => updateOrder(it.id, Number(e.target.value) || 0)}
+                      inputMode="numeric"
                     />
                     <a
                       href={`/teachers?q=${encodeURIComponent(it.title)}`}

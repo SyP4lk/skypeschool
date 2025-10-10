@@ -1,3 +1,4 @@
+const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
 "use client";
 
 import { useEffect, useState } from "react";
@@ -32,7 +33,7 @@ export default function EditTeacherPage() {
   useEffect(() => {
     if (!id) return;
     // загружаем список всех предметов
-    fetch(`/api/subjects`, {
+    fetch(`${API}/subjects`, {
       credentials: "include",
     })
       .then((res) => res.json())
@@ -43,7 +44,7 @@ export default function EditTeacherPage() {
       })
       .catch(() => {});
     // загружаем данные преподавателя
-    fetch(`/api/admin/teachers/${id}`, {
+    fetch(`${API}/admin/teachers/${id}`, {
       credentials: "include",
     })
       .then((res) => res.json())
@@ -81,7 +82,7 @@ export default function EditTeacherPage() {
     if (photoFile) {
       formData.append("photo", photoFile);
     }
-    const res = await fetch(`/api/admin/teachers/${id}`, {
+    const res = await fetch(`${API}/admin/teachers/${id}`, {
       method: "PUT",
       credentials: "include",
       body: formData,
@@ -97,7 +98,7 @@ export default function EditTeacherPage() {
   async function handleDelete() {
     if (!id) return;
     if (!confirm("Удалить преподавателя?")) return;
-    const res = await fetch(`/api/admin/teachers/${id}`, {
+    const res = await fetch(`${API}/admin/teachers/${id}`, {
       method: "DELETE",
       credentials: "include",
     });

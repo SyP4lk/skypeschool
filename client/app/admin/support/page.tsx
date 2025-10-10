@@ -1,145 +1,344 @@
+// PATCH: 2025-09-29 — мгновенные обновления (без after), дедуп по id
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardTitle } from '@/components/ui/Card';
 import Select from '@/components/ui/Select';
 import Input from '@/components/ui/Input';
 import { api } from '../_lib/api';
 
-type InboxStatus = 'new' | 'processed';
-type Row = {
+type Status = 'new' | 'open' | 'closed' | 'all';
+type Role = 'user' | 'admin';
+
+type ThreadListItem = {
   id: string;
+  firstAt?: string | null;
+  lastAt?: string | null;
+  count?: number;
   fromLogin?: string | null;
   contact?: string | null;
-  message: string;
-  status: InboxStatus;
-  createdAt: string;
-  _source: 'support' | 'trials';
+  // доп. поля — превью последнего сообщения
+  preview?: string;
+  previewRole?: Role;
 };
 
+type Message = {
+  id: string;
+  role: Role;
+  message: string;
+  createdAt: string; // ISO
+};
+
+const THREADS_REFRESH_MS = 30_000;
+const MESSAGES_REFRESH_MS = 5_000;
+
+function dt(s?: string | null) {
+  if (!s) return '—';
+  try {
+    return new Date(s).toLocaleString('ru-RU');
+  } catch {
+    return s;
+  }
+}
+
 export default function AdminSupportPage() {
-  const [status, setStatus] = useState<'all' | InboxStatus>('new');
+  // Левый список
+  const [status, setStatus] = useState<Status>('new');
   const [query, setQuery] = useState('');
-  const [items, setItems] = useState<Row[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [ok, setOk] = useState<string | null>(null);
-  const [readonly, setReadonly] = useState(false);
+  const [threads, setThreads] = useState<ThreadListItem[]>([]);
+  const [threadsLoading, setThreadsLoading] = useState(false);
+  const [threadsErr, setThreadsErr] = useState<string | null>(null);
 
-  const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((r) =>
-      [r.fromLogin, r.contact, r.message]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q)),
-    );
-  }, [items, query]);
+  // Правый чат
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [msgLoading, setMsgLoading] = useState(false);
+  const [sendText, setSendText] = useState('');
+  const [sendLoading, setSendLoading] = useState(false);
+  const [sendErr, setSendErr] = useState<string | null>(null);
 
-  async function load() {
-    setLoading(true); setErr(null); setOk(null); setReadonly(false);
+  const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
+
+  // Загрузка списка тредов
+  const loadThreads = useCallback(async () => {
+    setThreadsErr(null);
+    setThreadsLoading(true);
     try {
-      const qs = new URLSearchParams(); if (status !== 'all') qs.set('status', status);
-      const res = await api(`/admin/support${qs.toString() ? `?${qs}` : ''}`);
-      const list = (Array.isArray(res) ? res : (res.items || [])).map((r: any) => ({
-        id: r.id, fromLogin: r.fromLogin || r.name || '-', contact: r.contact || r.email || r.phone || null,
-        message: r.message || r.text || '-', status: (r.status as InboxStatus) || 'new',
-        createdAt: r.createdAt, _source: 'support' as const,
-      }));
-      setItems(list); setTotal(list.length);
-    } catch (e1: any) {
-      // фолбек на заявки — read-only
-      try {
-        const qs = new URLSearchParams(); if (status !== 'all') qs.set('status', status);
-        const res = await api(`/admin/trials${qs.toString() ? `?${qs}` : ''}`);
-        const list = (Array.isArray(res) ? res : (res.items || [])).map((r: any) => ({
-          id: r.id, fromLogin: r.name || '-', contact: r.contact || r.email || r.phone || null,
-          message: r.message || '-', status: (r.status as InboxStatus) || 'new',
-          createdAt: r.createdAt, _source: 'trials' as const,
-        }));
-        setItems(list); setTotal(list.length); setReadonly(true);
-      } catch (e2: any) {
-        setErr(e2?.message || e1?.message || 'Не удалось загрузить сообщения');
-      }
-    } finally { setLoading(false); }
-  }
+      const qs = new URLSearchParams();
+      if (status !== 'all') qs.set('status', status);
+      if (query.trim()) qs.set('query', query.trim());
+      const res = await api(`/admin/support/threads${qs.toString() ? `?${qs}` : ''}`);
 
-  useEffect(() => { load(); }, [status]);
+      const items: ThreadListItem[] = Array.isArray(res?.items)
+        ? res.items.map((r: any) => ({
+            id: String(r.id),
+            firstAt: r.firstAt || null,
+            lastAt: r.lastAt || null,
+            count: Number(r.count || 0),
+            fromLogin: r.fromLogin ?? null,
+            contact: r.contact ?? null,
+          }))
+        : [];
 
-  async function setRowStatus(row: Row, next: InboxStatus) {
-    if (readonly) return; // в фолбеке не меняем
-    setErr(null); setOk(null);
-    try {
-      await api(`/admin/support/${row.id}`, { method: 'PATCH', body: JSON.stringify({ status: next }) });
-      setOk(next === 'processed' ? 'Помечено как обработано' : 'Вернули в «Новые»');
-      await load();
+      setThreads(items);
+
+      // лениво подгружаем превью последнего
+      items.slice(0, 30).forEach(async (t) => {
+        try {
+          const m = await api(`/admin/support/threads/${t.id}/messages`);
+          const arr: Message[] = Array.isArray(m?.items) ? m.items : [];
+          const last = arr[arr.length - 1];
+          setThreads((prev) =>
+            prev.map((x) =>
+              x.id === t.id
+                ? { ...x, preview: last?.message || '', previewRole: last?.role || 'user' }
+                : x
+            )
+          );
+        } catch {}
+      });
+
+      if (!activeId && items.length) setActiveId(items[0].id);
     } catch (e: any) {
-      setErr(e?.message || 'Не удалось обновить статус');
+      setThreadsErr(e?.message || 'Не удалось загрузить список диалогов');
+    } finally {
+      setThreadsLoading(false);
     }
-  }
+  }, [status, query, activeId]);
+
+  // Загрузка сообщений выбранного треда (без after) + дедуп по id
+  const loadMessages = useCallback(
+    async (initial = false) => {
+      if (!activeId) return;
+      setMsgLoading(initial);
+      try {
+        const res = await api(`/admin/support/threads/${activeId}/messages`);
+        const add: Message[] = Array.isArray(res?.items) ? res.items : [];
+        if (!add.length) {
+          if (initial) setMessages([]);
+          return;
+        }
+
+        setMessages((prev) => {
+          if (initial) return add;
+          const seen = new Set(prev.map((m) => m.id));
+          const filtered = add.filter((m) => !seen.has(m.id));
+          return filtered.length ? [...prev, ...filtered] : prev;
+        });
+
+        setTimeout(
+          () => scrollAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }),
+          50
+        );
+      } catch {
+        // тихо
+      } finally {
+        setMsgLoading(false);
+      }
+    },
+    [activeId]
+  );
+
+  // Инициализация / обновление списка
+  useEffect(() => {
+    void loadThreads();
+    const t = setInterval(() => void loadThreads(), THREADS_REFRESH_MS);
+    return () => clearInterval(t);
+  }, [loadThreads]);
+
+  // Смена активного треда — полная загрузка ленты + опрос
+  useEffect(() => {
+    if (!activeId) return;
+    setMessages([]);
+    void loadMessages(true);
+    const t = setInterval(() => void loadMessages(false), MESSAGES_REFRESH_MS);
+    return () => clearInterval(t);
+  }, [activeId, loadMessages]);
+
+  // Отправка сообщения (оптимистично + полный рефетч)
+  const send = useCallback(async () => {
+    if (!activeId || !sendText.trim() || sendLoading) return;
+    setSendLoading(true);
+    setSendErr(null);
+
+    const text = sendText.trim();
+    const optimistic: Message = {
+      id: 'tmp-' + Math.random().toString(36).slice(2),
+      role: 'admin',
+      message: text,
+      createdAt: new Date().toISOString(),
+    };
+
+    // мгновенно показать в правой колонке
+    setMessages((prev) => [...prev, optimistic]);
+
+    // обновить превью и время у выбранного треда в левой колонке
+    setThreads((prev) =>
+      prev.map((t) =>
+        t.id === activeId ? { ...t, preview: text, previewRole: 'admin', lastAt: optimistic.createdAt } : t
+      )
+    );
+
+    setSendText('');
+
+    try {
+      await api(`/admin/support/threads/${activeId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+
+      // полный refetch ленты
+      await loadMessages(true);
+    } catch (e: any) {
+      // откат оптимистичного сообщения
+      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      setSendErr(e?.message || 'Не удалось отправить сообщение');
+    } finally {
+      setSendLoading(false);
+    }
+  }, [activeId, sendText, sendLoading, loadMessages]);
+
+  // Поиск/фильтрация в левой колонке
+  const filteredThreads = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return threads;
+    return threads.filter((t) => [t.id, t.preview, t.fromLogin, t.contact]
+      .some((v) => String(v || '').toLowerCase().includes(q)));
+  }, [threads, query]);
 
   return (
     <div className="grid gap-6">
       <Card>
         <CardTitle>Поддержка</CardTitle>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <Select value={status} onChange={(e) => setStatus(e.target.value as any)}>
+        {/* Панель управления */}
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <Select value={status} onChange={(e) => setStatus(e.target.value as Status)}>
             <option value="new">Новые</option>
-            <option value="processed">Обработанные</option>
+            <option value="open">Открытые</option>
+            <option value="closed">Закрытые</option>
             <option value="all">Все</option>
           </Select>
 
-          <Input placeholder="Поиск (логин, контакт, текст)" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <button className="px-3 py-2 rounded bg-black text-white" onClick={load} type="button">Обновить</button>
+          <Input placeholder="Поиск (имя/контакт/текст/id)" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <button className="px-3 py-2 rounded bg-black text-white" onClick={() => void loadThreads()} type="button">
+            Обновить
+          </button>
 
-          <span className="text-sm text-gray-500">{total} всего</span>
-          {readonly && <span className="text-xs text-gray-500">режим только чтение (нет /admin/support)</span>}
-          {loading && <span className="text-sm text-gray-500">Загрузка…</span>}
-          {ok && <span className="text-sm text-green-700">{ok}</span>}
-          {err && <span className="text-sm text-red-600">{err}</span>}
+          {threadsLoading && <span className="text-sm text-gray-500">Загрузка…</span>}
+          {threadsErr && <span className="text-sm text-red-600">{threadsErr}</span>}
         </div>
 
-        <table className="w-full mt-3 border-collapse">
-          <thead>
-            <tr className="text-left text-sm text-gray-500">
-              <th className="py-2 px-3">Дата</th>
-              <th className="py-2 px-3">От</th>
-              <th className="py-2 px-3">Контакт</th>
-              <th className="py-2 px-3">Сообщение</th>
-              <th className="py-2 px-3">Статус</th>
-              <th className="py-2 px-3"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className="border-t align-top">
-                <td className="py-2 px-3 whitespace-nowrap">{new Date(r.createdAt).toLocaleString('ru-RU')}</td>
-                <td className="py-2 px-3">{r.fromLogin || '—'}</td>
-                <td className="py-2 px-3">{r.contact || '—'}</td>
-                <td className="py-2 px-3 max-w-[520px]"><div className="whitespace-pre-wrap break-words">{r.message}</div></td>
-                <td className="py-2 px-3">
-                  <span className={r.status === 'new' ? 'text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-800' : 'text-xs px-2 py-1 rounded bg-green-100 text-green-800'}>
-                    {r.status === 'new' ? 'Новая' : 'Обработана'}
-                  </span>
-                </td>
-                <td className="py-2 px-3 whitespace-nowrap">
-                  {readonly ? (
-                    <span className="text-xs text-gray-400">только чтение</span>
-                  ) : r.status === 'new' ? (
-                    <button className="text-sm px-2 py-1 rounded bg-green-600 text-white" onClick={() => setRowStatus(r, 'processed')}>Обработать</button>
-                  ) : (
-                    <button className="text-sm px-2 py-1 rounded bg-gray-700 text-white" onClick={() => setRowStatus(r, 'new')}>В «Новые»</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr><td className="py-4 px-3 text-gray-500" colSpan={6}>{loading ? 'Загрузка…' : 'Пока нет сообщений'}</td></tr>
+        {/* Две колонки: список тредов и чат */}
+        {/* Две колонки: список тредов и чат */}
+<div className="grid" style={{ gridTemplateColumns: '280px 1fr', gap: '16px' }}>
+  {/* Левая колонка — список диалогов */}
+  <div className="border rounded-lg overflow-hidden h-[70vh]">
+    <div className="px-3 py-2 text-sm text-gray-500 border-b">Сообщения поддержки</div>
+    {/* фиксированная высота + скролл */}
+    <div className="h-[calc(70vh-36px)] overflow-y-auto">
+      {filteredThreads.map((t) => {
+        const name = t.fromLogin?.trim();
+        const contact = t.contact?.trim();
+        const hasMeta = Boolean(name || contact);
+        const title = hasMeta ? `${name || 'Без имени'}${contact ? ` • ${contact}` : ''}` : null;
+
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setActiveId(t.id)}
+            className={`block w-full text-left px-3 py-3 border-b hover:bg-gray-50 ${
+              activeId === t.id ? 'bg-gray-50' : ''
+            }`}
+          >
+            <div className="text-sm font-medium">{title ?? <>Диалог #{t.id.slice(0, 8)}</>}</div>
+            <div className="text-xs text-gray-500">{dt(t.lastAt)}</div>
+
+            {t.preview && (
+              <div className="mt-1 text-sm line-clamp-2">
+                {t.previewRole === 'admin' ? 'Вы: ' : ''}
+                {t.preview}
+              </div>
             )}
-          </tbody>
-        </table>
+          </button>
+        );
+      })}
+
+      {filteredThreads.length === 0 && (
+        <div className="px-3 py-6 text-sm text-gray-500">Диалоги не найдены</div>
+      )}
+    </div>
+  </div>
+
+  {/* Правая колонка — чат */}
+  <div className="border rounded-lg flex flex-col h-[70vh]">
+    {!activeId ? (
+      <div className="p-6 text-gray-500">Выберите диалог слева</div>
+    ) : (
+      <>
+        {/* фиксированная шапка */}
+        <div className="px-4 py-2 border-b text-sm text-gray-500">
+          Диалог #{activeId.slice(0, 8)} • {messages.length} сообщений
+        </div>
+
+        {/* прокручиваемая лента */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+          {msgLoading && messages.length === 0 && (
+            <div className="text-sm text-gray-500">Загрузка…</div>
+          )}
+
+          {messages.map((m) => (
+            <div key={m.id} className={m.role === 'admin' ? 'text-right' : 'text-left'}>
+              <div
+                className="inline-block px-3 py-2 rounded-2xl max-w-[72%]"
+                style={
+                  m.role === 'admin'
+                    ? { backgroundColor: '#e7f0ff', color: '#1e3a8a' }
+                    : { backgroundColor: '#f1f3f5', color: '#111827' }
+                }
+              >
+                <div className="whitespace-pre-wrap break-words">{m.message}</div>
+                <div className="text-[10px] opacity-60 mt-1">{dt(m.createdAt)}</div>
+              </div>
+            </div>
+          ))}
+          <div ref={scrollAnchorRef} />
+        </div>
+
+        {/* фиксированный футер */}
+        <div className="px-4 py-3 border-t bg-white">
+          <div className="flex items-center gap-2">
+            <input
+              className="flex-1 border rounded px-3 py-2"
+              placeholder="Ваш ответ…"
+              value={sendText}
+              onChange={(e) => setSendText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  void send();
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => void send()}
+              disabled={!sendText.trim() || sendLoading}
+              className="px-3 py-2 rounded text-white disabled:opacity-60"
+              style={{ backgroundColor: 'var(--colour-primary)' }}
+            >
+              Отправить
+            </button>
+          </div>
+          {sendErr && <div className="text-xs text-red-600 mt-1">{sendErr}</div>}
+        </div>
+      </>
+    )}
+  </div>
+</div>
+
       </Card>
     </div>
   );

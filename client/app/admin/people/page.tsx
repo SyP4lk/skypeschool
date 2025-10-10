@@ -53,6 +53,33 @@ function matchUser(u: Item, q: string) {
   );
 }
 
+/* ===== upload helpers (правильные) ===== */
+async function uploadTeacherPhotoFile(teacherId: string, file: File): Promise<{ url: string }> {
+  const fd = new FormData();
+  fd.append('file', file);
+  const r = await fetch(`/api/admin/teachers/${encodeURIComponent(teacherId)}/photo`, {
+    method: 'POST',           // загрузка файла
+    body: fd,                 // НЕ ставим Content-Type вручную
+    credentials: 'include',
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j?.url) throw new Error(j?.message || 'upload failed');
+  return { url: String(j.url) };
+}
+
+async function patchTeacherPhoto(teacherId: string, url: string) {
+  const r = await fetch(`/api/admin/teachers/${encodeURIComponent(teacherId)}/photo`, {
+    method: 'PATCH',          // сохранить URL в профиле
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ url }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j?.message || 'patch photo failed');
+  return j;
+}
+/* ======================================= */
+
 export default function AdminPeoplePage() {
   // поиск
   const [q, setQ] = useState('');
@@ -78,12 +105,16 @@ export default function AdminPeoplePage() {
   // поля преподавателя
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [about, setAbout] = useState('');
-  const [photo, setPhoto] = useState<File | null>(null);
   const [subjectId, setSubjectId] = useState('');
   const [duration, setDuration] = useState('');
-  const [price, setPrice] = useState(''); // РУБЛИ (целое)
+  const [price, setPrice] = useState('');             // ₽ (для преподавателя)
+  const [publicPrice, setPublicPrice] = useState(''); // ₽ (публичная)
 
-  // контакты преподавателя (Новые поля)
+  // фото (создание)
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
+  // контакты преподавателя
   const [tContacts, setTContacts] = useState({
     contactVk: '',
     contactTelegram: '',
@@ -96,11 +127,16 @@ export default function AdminPeoplePage() {
 
   const isTeacher = role === 'teacher';
 
+  function onCreatePhotoChange(file: File | null) {
+    setPhotoFile(file);
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoPreview(file ? URL.createObjectURL(file) : null);
+  }
+
   function normalizeBalance(b: any): number {
     if (typeof b === 'number') return Number.isFinite(b) ? b : 0;
     if (typeof b === 'string') { const n = parseFloat(b.replace(',', '.')); return Number.isFinite(n) ? n : 0; }
     if (b && typeof b === 'object') {
-      // Prisma.Decimal
       if ('toNumber' in b && typeof (b as any).toNumber === 'function') {
         try { const n = (b as any).toNumber(); return Number.isFinite(n) ? n : 0; } catch {}
       }
@@ -141,131 +177,173 @@ export default function AdminPeoplePage() {
     return all.filter((u) => matchUser(u, qq));
   }, [all, q]);
 
-async function onCreate() {
-  setMsg(null); setErr(null);
-
-  // нормализация сообщений уникальности
-  const nice = (err: any) => {
-    const raw = err?.message ? String(err.message) : String(err || '');
-    let msg = raw;
-    try { const j = JSON.parse(raw); if (j?.message) msg = String(j.message); } catch {}
-    if (/login_taken|unique.*login/i.test(msg)) return 'Логин уже занят';
-    if (/email_taken|unique.*email/i.test(msg)) return 'Этот E-mail уже используется';
-    if (/phone_taken|unique.*phone/i.test(msg)) return 'Этот телефон уже используется';
-    if (/unique_constraint_violation/i.test(msg)) return 'Логин/E-mail/телефон уже заняты';
-    return msg || 'Ошибка';
-  };
-
-  try {
-    const l = login.trim();
-    if (!l) throw new Error('Укажи логин');
-
-    if (role === 'student') {
-      // 1) создаём пользователя
-      let created: any;
+  async function upsertPricing(teacherId: string, subjectId: string, teacherPriceKop: number, publicPriceKop: number) {
+    const payload = {
+      teacherId,
+      subjectId,
+      teacherPrice: teacherPriceKop,
+      publicPrice: publicPriceKop,
+    };
+    async function tryCall(path: string, method: 'PUT'|'POST' = 'PUT') {
       try {
-        created = await api<any>(`/admin/users`, {
-          method: 'POST',
-          body: JSON.stringify({
-            role: 'student',
-            login: l,
-            firstName: firstName || undefined,
-            lastName: lastName || undefined,
-            password: password || undefined, // опционально
-            phone: phone || undefined,
-            email: email || undefined,
-          }),
-        });
+        await api(path, { method, body: JSON.stringify(payload) });
+        return true;
       } catch (e: any) {
-        throw new Error(nice(e));
+        const msg = String(e?.message || '');
+        if (msg.includes('Not Found') || msg.includes('404')) return false;
+        throw e;
       }
-
-      const newUserId = created?.user?.id || created?.id;
-      const newUserLogin = created?.user?.login || created?.login;
-
-      // 2) дублируем phone/email (совместимость со старой схемой)
-      try {
-        await api(`/admin/users/${newUserId}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ phone: phone || null, email: email || null }),
-        });
-      } catch {}
-
-      // 3) контакты ученика (если есть форма)
-      try {
-        await api(`/admin/students/${newUserId}`, {
-          method: 'PATCH',
-          body: JSON.stringify({
-            contactSkype: contact.skype || null,
-            contactVk: contact.vk || null,
-            contactGoogle: contact.google || null,
-            contactWhatsapp: contact.whatsapp || null,
-            contactMax: contact.max || null,
-            contactDiscord: contact.discord || null,
-          }),
-        });
-      } catch {}
-
-      setMsg(`Создан ученик ${newUserLogin || ''}.`);
-    } else {
-      // --- Преподаватель (JSON, без фото) ---
-      if (!password || password.length < 8) throw new Error('Для преподавателя пароль обязателен (мин. 8)');
-      if (!subjectId) throw new Error('Выбери предмет');
-
-      const durationNum = parseInt(duration, 10);
-      const priceRubNum = parseInt((price || '0').replace(',', '.'));
-      if (!Number.isFinite(durationNum) || durationNum <= 0) throw new Error('Некорректная длительность');
-      if (!Number.isFinite(priceRubNum) || priceRubNum <= 0) throw new Error('Некорректная цена');
-
-      // 1) создаём пользователя-учителя
-      let created: any;
-      try {
-        created = await api<any>(`/admin/users`, {
-          method: 'POST',
-          body: JSON.stringify({
-            role: 'teacher',
-            login: l,
-            firstName: firstName || undefined,
-            lastName: lastName || undefined,
-            password,
-            phone: phone || undefined,
-            email: email || undefined,
-          }),
-        });
-      } catch (e: any) {
-        throw new Error(nice(e));
-      }
-
-      const userId = created?.user?.id || created?.id;
-      if (!userId) throw new Error('user_not_created');
-
-      // 2) апсерт профиля преподавателя
-      try { await api(`/admin/teachers`, { method: 'POST', body: JSON.stringify({ userId }) }); } catch {}
-
-      // 3) профиль + предметы + мессенджеры
-      const teacherSubjects = [{ subjectId, duration: durationNum, price: priceRubNum }];
-      const payload: any = { aboutShort: about || '', teacherSubjects, ...tContacts };
-      try { await api(`/admin/teachers/${userId}`, { method: 'PUT', body: JSON.stringify(payload) }); } catch (e: any) {
-        throw new Error(nice(e));
-      }
-
-      setMsg('Создан преподаватель.');
     }
-
-    // сброс формы
-    setLogin(''); setPassword(''); setFirst(''); setLast(''); setPhone(''); setEmail('');
-    setAbout(''); setPhoto(null); setSubjectId(''); setDuration(''); setPrice('');
-    setContact({ skype:'', vk:'', google:'', whatsapp:'', max:'', discord:'' });
-    setTContacts({ contactVk:'', contactTelegram:'', contactWhatsapp:'', contactZoom:'', contactTeams:'', contactDiscord:'', contactMax:'' });
-
-    // обновляем список без перезагрузки страницы
-    await loadAll();
-  } catch (e: any) {
-    setErr(e?.message || 'Ошибка создания');
+    if (await tryCall('/admin/pricing', 'PUT')) return;
+    if (await tryCall('/pricing/admin/upsert', 'POST')) return;
   }
-}
 
+  async function onCreate() {
+    setMsg(null); setErr(null);
 
+    const nice = (err: any) => {
+      const raw = err?.message ? String(err.message) : String(err || '');
+      let msg = raw;
+      try { const j = JSON.parse(raw); if (j?.message) msg = String(j.message); } catch {}
+      if (/login_taken|unique.*login/i.test(msg)) return 'Логин уже занят';
+      if (/email_taken|unique.*email/i.test(msg)) return 'Этот E-mail уже используется';
+      if (/phone_taken|unique.*phone/i.test(msg)) return 'Этот телефон уже используется';
+      if (/unique_constraint_violation/i.test(msg)) return 'Логин/E-mail/телефон уже заняты';
+      return msg || 'Ошибка';
+    };
+
+    try {
+      const l = login.trim();
+      if (!l) throw new Error('Укажи логин');
+
+      if (role === 'student') {
+        // 1) создаём пользователя-ученика
+        let created: any;
+        try {
+          created = await api<any>(`/admin/users`, {
+            method: 'POST',
+            body: JSON.stringify({
+              role: 'student',
+              login: l,
+              firstName: firstName || undefined,
+              lastName: lastName || undefined,
+              password: password || undefined,
+              phone: phone || undefined,
+              email: email || undefined,
+            }),
+          });
+        } catch (e: any) {
+          throw new Error(nice(e));
+        }
+
+        const newUserId = created?.user?.id || created?.id;
+
+        // 2) дублируем phone/email
+        try {
+          await api(`/admin/users/${newUserId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ phone: phone || null, email: email || null }),
+          });
+        } catch {}
+
+        // 3) контакты ученика
+        try {
+          await api(`/admin/students/${newUserId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              contactSkype: contact.skype || null,
+              contactVk: contact.vk || null,
+              contactGoogle: contact.google || null,
+              contactWhatsapp: contact.whatsapp || null,
+              contactMax: contact.max || null,
+              contactDiscord: contact.discord || null,
+            }),
+          });
+        } catch {}
+
+        setMsg(`Создан ученик ${l}.`);
+      } else {
+        // --- Преподаватель ---
+        if (!password || password.length < 8) throw new Error('Для преподавателя пароль обязателен (мин. 8)');
+        if (!subjectId) throw new Error('Выбери предмет');
+
+        const durationNum = parseInt(duration, 10);
+        const teacherPriceRub = parseFloat((price || '0').replace(',', '.'));
+        const publicPriceRubNum = parseFloat((publicPrice || '0').replace(',', '.'));
+
+        if (!Number.isFinite(durationNum) || durationNum <= 0) throw new Error('Некорректная длительность');
+        if (!Number.isFinite(teacherPriceRub) || teacherPriceRub <= 0) throw new Error('Некорректная цена (для преподавателя)');
+        if (!Number.isFinite(publicPriceRubNum) || publicPriceRubNum <= 0) throw new Error('Некорректная публичная цена');
+
+        const teacherPriceKop = Math.round(teacherPriceRub * 100);
+        const publicPriceKop = Math.round(publicPriceRubNum * 100);
+
+        // 1) создаём пользователя-учителя
+        let created: any;
+        try {
+          created = await api<any>(`/admin/users`, {
+            method: 'POST',
+            body: JSON.stringify({
+              role: 'teacher',
+              login: l,
+              firstName: firstName || undefined,
+              lastName: lastName || undefined,
+              password,
+              phone: phone || undefined,
+              email: email || undefined,
+            }),
+          });
+        } catch (e: any) {
+          throw new Error(nice(e));
+        }
+
+        const userId = created?.user?.id || created?.id;
+        if (!userId) throw new Error('user_not_created');
+
+        // 2) апсерт профиля преподавателя
+        try { await api(`/admin/teachers`, { method: 'POST', body: JSON.stringify({ userId }) }); } catch {}
+
+        // 3) профиль + предметы + контакты
+        const teacherSubjects = [{ subjectId, duration: durationNum, price: Math.round(teacherPriceRub) }];
+        const payload: any = { aboutShort: about || '', teacherSubjects, ...tContacts };
+        try { await api(`/admin/teachers/${userId}`, { method: 'PUT', body: JSON.stringify(payload) }); } catch (e: any) {
+          throw new Error(nice(e));
+        }
+
+        // 4) апсерт Pricing (teacherPrice + publicPrice)
+        try {
+          await upsertPricing(userId, subjectId, teacherPriceKop, publicPriceKop);
+        } catch (e: any) {
+          console.warn('pricing upsert failed', e?.message || e);
+        }
+
+        // 5) если есть фото — заливаем и привязываем
+        if (photoFile) {
+          try {
+            const { url } = await uploadTeacherPhotoFile(userId, photoFile); // ← правильный POST
+            await patchTeacherPhoto(userId, url);                            // ← фиксируем в профиле
+          } catch (e: any) {
+            console.warn('teacher photo upload failed:', e?.message || e);
+          }
+        }
+
+        setMsg('Создан преподаватель.');
+      }
+
+      // сброс формы
+      setLogin(''); setPassword(''); setFirst(''); setLast(''); setPhone(''); setEmail('');
+      setAbout(''); setSubjectId(''); setDuration(''); setPrice(''); setPublicPrice('');
+      setContact({ skype:'', vk:'', google:'', whatsapp:'', max:'', discord:'' });
+      setTContacts({ contactVk:'', contactTelegram:'', contactWhatsapp:'', contactZoom:'', contactTeams:'', contactDiscord:'', contactMax:'' });
+      if (photoPreview) URL.revokeObjectURL(photoPreview);
+      setPhotoPreview(null);
+      setPhotoFile(null);
+
+      await loadAll();
+    } catch (e: any) {
+      setErr(e?.message || 'Ошибка создания');
+    }
+  }
 
   async function onDelete(u: Item) {
     if (u.role === 'admin') return alert('Админа удалять нельзя');
@@ -330,7 +408,19 @@ async function onCreate() {
           {role === 'teacher' && (
             <>
               <div className="md:col-span-3"><label className="text-sm block mb-1">Короткое описание</label><input className="w-full rounded border px-3 py-2" value={about} onChange={e=>setAbout(e.target.value)} /></div>
-              <div><label className="text-sm block mb-1">Фото</label><input type="file" accept="image/*" onChange={e=>setPhoto(e.currentTarget.files?.[0] || null)} /></div>
+
+              <div>
+                <label className="text-sm block mb-1">Фото</label>
+                {photoPreview && (
+                  <img src={photoPreview} alt="preview" className="mb-2 h-24 w-24 object-cover rounded" />
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => onCreatePhotoChange(e.currentTarget.files?.[0] ?? null)}
+                />
+              </div>
+
               <div><label className="text-sm block mb-1">Предмет</label>
                 <select className="w-full rounded border px-3 py-2" value={subjectId} onChange={e=>setSubjectId(e.target.value)}>
                   <option value="">— выберите —</option>
@@ -338,9 +428,10 @@ async function onCreate() {
                 </select>
               </div>
               <div><label className="text-sm block mb-1">Длительность (мин)</label><input className="w-full rounded border px-3 py-2" value={duration} onChange={e=>setDuration(e.target.value)} /></div>
-              <div><label className="text-sm block mb-1">Цена (₽)</label><input className="w-full rounded border px-3 py-2" value={price} onChange={e=>setPrice(e.target.value)} /></div>
+              <div><label className="text-sm block mb-1">Цена (₽)</label><input className="w-full rounded border px-3 py-2" value={price} onChange={e=>setPrice(e.target.value)} placeholder="на счёт преподавателя" /></div>
+              <div><label className="text-sm block mb-1">Публичная цена (₽)</label><input className="w-full rounded border px-3 py-2" value={publicPrice} onChange={e=>setPublicPrice(e.target.value)} placeholder="видна ученикам/на сайте" /></div>
 
-              {/* Контакты преподавателя: VK, Telegram, WhatsApp, Zoom, Teams, Discord, MAX */}
+              {/* Контакты преподавателя */}
               <div><label className="text-sm block mb-1">VK</label><input className="w-full rounded border px-3 py-2" value={tContacts.contactVk} onChange={e=>setTContacts({...tContacts, contactVk:e.target.value})} /></div>
               <div><label className="text-sm block mb-1">Telegram</label><input className="w-full rounded border px-3 py-2" value={tContacts.contactTelegram} onChange={e=>setTContacts({...tContacts, contactTelegram:e.target.value})} /></div>
               <div><label className="text-sm block mb-1">WhatsApp</label><input className="w-full rounded border px-3 py-2" value={tContacts.contactWhatsapp} onChange={e=>setTContacts({...tContacts, contactWhatsapp:e.target.value})} /></div>

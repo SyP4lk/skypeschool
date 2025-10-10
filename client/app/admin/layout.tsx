@@ -17,12 +17,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const [ready, setReady] = useState(false);
 
-  // IMPORTANT: use local Next proxy to keep cookies/domain (3001) and avoid CORS
-  const apiBase = '/api';
-
   async function logout() {
     try {
-      await fetch(`${apiBase}/auth/logout`, { method: 'POST', credentials: 'include' });
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
     } finally {
       router.replace('/login');
     }
@@ -34,21 +31,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     async function guard() {
       setReady(false);
       try {
-        const res = await fetch(`${apiBase}/auth/me`, {
+        const res = await fetch('/api/auth/me', {
           credentials: 'include',
           cache: 'no-store',
         });
 
-        if (res.status === 401) {
-          if (!aborted) router.replace('/login');
-          return;
-        }
-        if (!res.ok) {
+        if (res.status === 401 || !res.ok) {
           if (!aborted) router.replace('/login');
           return;
         }
 
-        // сервер может вернуть { user: { role } } или { role }
         const data = await res.json();
         const role: string | undefined = data?.user?.role ?? data?.role;
 
@@ -70,10 +62,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => { aborted = true; };
   }, [router]);
 
-  if (!ready) {
-    // мини-скелет, чтобы не мигало
-    return <div className="min-h-screen bg-gray-50" />;
-  }
+  if (!ready) return <div className="min-h-screen bg-gray-50" />;
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 flex">

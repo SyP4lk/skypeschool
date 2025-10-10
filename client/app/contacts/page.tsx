@@ -32,10 +32,9 @@ export default function ContactPage() {
             <a href="https://t.me/Marinaskypeschool" target="_blank" rel="noopener noreferrer" aria-label="Telegram">
               <img src="/telegram.svg" alt="Telegram" width={28} height={28} />
             </a>
-            <a href="https://www.instagram.com/skype_school_marina/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
-              <img src="/instagram.svg" alt="Instagram" width={28} height={28} />
+            <a href="https://ok.ru/profile/13167782860" target="_blank" rel="noopener noreferrer" aria-label="VK">
+                <img src="/ok.svg" alt="VK" width={28} height={28} className="inline-block" />
             </a>
-            
             <a href="https://wa.me/79093443705" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
               <img src="/whatsapp.svg" alt="WhatsApp" width={28} height={28} />
             </a>

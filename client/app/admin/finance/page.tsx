@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
+import ProfitCard from './ProfitCard';
 
 type User = {
   id: string;
@@ -302,6 +303,8 @@ export default function AdminFinancePage() {
           <div className="ml-auto text-xs text-gray-500">Показано: {ops.length} / {total}</div>
         </div>
       </section>
-    </div>
+      <ProfitCard/>
+  </div>
   );
 }
+

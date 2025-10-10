@@ -1,0 +1,9 @@
+
+1) server/src/app.module.ts:
+   - Добавьте импорт:
+       import { PricingModule } from './modules/pricing/pricing.module';
+   - В секцию @Module({ imports: [ ... ] }) добавьте: PricingModule,
+
+2) server/src/modules/teachers/teacher-lessons.controller.ts:
+   В методе @Patch('me/lessons/:id/done') используйте PricingService для расчёта publicPrice.
+   См. файл server/PATCH_TEACHER_DONE.txt

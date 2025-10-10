@@ -1,4 +1,5 @@
 const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/+$/, '');
+const fmtMoney = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' });
 const ORIGIN = API.replace(/\/api$/, '');
 const toAbs = (p?: string | null) => (!p ? null : p.startsWith('http') ? p : `${ORIGIN}${p.startsWith('/') ? '' : '/'}${p}`);
 
@@ -43,11 +44,25 @@ export default async function Page({ params }: Props) {
   const avatarUrl = toAbs(data.photo);
   const about = data.aboutFull?.trim() || data.aboutShort?.trim() || '';
 
+  // Загружаем публичные цены для каждого предмета
+  const priceMap = Object.create(null) as Record<string, number>;
+  await Promise.all((data.teacherSubjects || []).map(async (ts) => {
+    const sid = ts.subject?.id || ts.subjectId || '';
+    if (!sid) return;
+    try {
+      const r = await fetch(`${API}/pricing/resolve?teacherId=${encodeURIComponent(data.id)}&subjectId=${encodeURIComponent(sid)}`, { cache: 'no-store', credentials: 'include' });
+      const j = await r.json().catch(() => ({}));
+      const kop = Number(j?.item?.publicPrice || 0);
+      if (kop > 0) priceMap[sid] = kop;
+    } catch {}
+  }));
+
   const subjects = (data.teacherSubjects || [])
     .map((ts) => ({
       id: ts.subject?.id || ts.subjectId || '',
       name: ts.subject?.name || '',
       price: typeof ts.price === 'number' ? ts.price : null,
+      publicKop: priceMap[ts.subject?.id || ts.subjectId || ''] || null,
       duration: typeof ts.duration === 'number' ? ts.duration : null,
     }))
     .filter((s) => s.id && s.name);
@@ -80,7 +95,7 @@ export default async function Page({ params }: Props) {
               <li key={s.id} className="flex items-center justify-between rounded border px-3 py-2">
                 <span>{s.name}</span>
                 <span className="text-sm text-gray-600">
-                  {s.duration ? `${s.duration} мин` : ''} {s.price ? `· ${s.price} ₽` : ''}
+                  {s.duration ? `${s.duration} мин` : ''} {s.publicKop ? `· ${fmtMoney.format(s.publicKop/100)}` : (s.price ? `· ${fmtMoney.format(Number(s.price)/100)}` : '')}
                 </span>
               </li>
             ))}

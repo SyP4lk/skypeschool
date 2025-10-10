@@ -1,4 +1,6 @@
 'use client';
+const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
+
 import { useEffect, useState } from 'react';
 import { api } from './_lib/api';
 import { NotifyCenter } from '@/shared/ui/NotifyCenter';
@@ -14,7 +16,8 @@ type Lesson = {
   startsAt: string;
   duration?: number | null;
   durationMin?: number | null;
-  price?: number | null; // в копейках
+  price?: number | null;      // teacherPrice (копейки)
+  billPrice?: number | null;  // publicPrice (копейки) — НОВОЕ!
   status?: string | null;
   teacher?: { id: string; login?: string | null; firstName?: string | null; lastName?: string | null } | null;
   subjectName?: string | null;
@@ -30,7 +33,15 @@ function normalizeStatus(s?: string | null) {
   return v || 'PLANNED';
 }
 const lDuration = (l: Lesson) => Number(l.durationMin ?? l.duration ?? 60);
-const lPriceRub = (l: Lesson) => Number(l.price ?? 0) / 100;
+
+// итоговая цена для отображения (в рублях)
+const displayRub = (l: Lesson) => {
+  const kop =
+    (Number.isFinite(l.billPrice as any) && Number(l.billPrice) > 0 ? Number(l.billPrice) : null) ??
+    (Number.isFinite(l.price as any) ? Number(l.price) : 0);
+  return kop / 100;
+};
+
 const teacherLabel = (t?: Lesson['teacher']) => {
   if (!t) return '';
   const fio = [t.lastName, t.firstName].filter(Boolean).join(' ');
@@ -50,12 +61,42 @@ export default function StudentLK() {
     const b = await api<{ balance: number; currency: string }>('/finance/me/balance');
     setBalance(Number(b?.balance ?? 0) / 100); // копейки → ₽
   }
+
+  async function resolvePublicKop(teacherId?: string|null, subjectId?: string|null): Promise<number|null> {
+    if (!teacherId || !subjectId) return null;
+    try {
+      const r = await fetch(`${API}/pricing/resolve?teacherId=${encodeURIComponent(teacherId)}&subjectId=${encodeURIComponent(subjectId)}`, { cache: 'no-store', credentials: 'include' });
+      const j = await r.json().catch(()=>({}));
+      const kop = Number(j?.item?.publicPrice || 0);
+      return Number.isFinite(kop) && kop>0 ? kop : null;
+    } catch { return null; }
+  }
+
   async function loadLessons() {
     const rows = await api<Lesson[]>('/student/me/lessons');
-    const norm = (Array.isArray(rows) ? rows : []).map(l => ({ ...l, status: normalizeStatus(l.status) }));
-    setUpcoming(norm.filter(l => l.status !== 'DONE' && l.status !== 'CANCELED').sort((a,b)=>+new Date(a.startsAt)-+new Date(b.startsAt)));
-    setDoneList(norm.filter(l => l.status === 'DONE').sort((a,b)=>+new Date(b.startsAt)-+new Date(a.startsAt)));
+    const base = (Array.isArray(rows) ? rows : []).map(l => ({ ...l, status: normalizeStatus(l.status) }));
+
+    // если сервер уже отдал billPrice — используем; иначе дотягиваем
+    const enriched = await Promise.all(base.map(async (l) => {
+      if (Number.isFinite(l.billPrice as any) && Number(l.billPrice) > 0) return l;
+      const tId = (l.teacher as any)?.id || null;
+      const sId = l.subjectId || null;
+      const kop = await resolvePublicKop(tId, sId);
+      return kop ? { ...l, billPrice: kop } : l;
+    }));
+
+    setUpcoming(
+      enriched
+        .filter(l => l.status !== 'DONE' && l.status !== 'CANCELED')
+        .sort((a,b)=>+new Date(a.startsAt)-+new Date(b.startsAt))
+    );
+    setDoneList(
+      enriched
+        .filter(l => l.status === 'DONE')
+        .sort((a,b)=>+new Date(b.startsAt)-+new Date(a.startsAt))
+    );
   }
+
   async function loadTopupText() {
     try {
       const r = await api<{ text?: string }>('/student/me/topup-text');
@@ -68,7 +109,7 @@ export default function StudentLK() {
       try {
         const me = await api('/auth/me');
         setHelloName((me?.firstName || me?.login || '').trim());
-      } catch {/* no-op */}
+      } catch {}
     })();
   }, []);
 
@@ -118,18 +159,14 @@ export default function StudentLK() {
                   <div className="font-medium">{l.subjectName || 'Предмет'}</div>
                   <div className="text-sm text-gray-600">{teacherLabel(l.teacher)}</div>
                   <div className="text-sm">
-                    {fmtDate.format(new Date(l.startsAt))}
-                    {' '}
+                    {fmtDate.format(new Date(l.startsAt))}{' '}
                     {canCancel(l.startsAt) && (
-                      <button
-                        className="px-2 py-1 rounded border text-xs"
-                        onClick={() => cancelLesson(l.id)}
-                      >
-                        Отменить
-                      </button>
+                      <button className="px-2 py-1 rounded border text-xs" onClick={() => cancelLesson(l.id)}>Отменить</button>
                     )}
                   </div>
-                  <div className="text-sm">{lDuration(l)} мин · {fmtMoney.format(lPriceRub(l))}</div>
+                  <div className="text-sm">
+                    {lDuration(l)} мин · {fmtMoney.format(displayRub(l))}
+                  </div>
                   {l.comment ? <div className="text-xs text-gray-500">Комментарий: {l.comment}</div> : null}
                 </div>
               </div>
@@ -150,7 +187,9 @@ export default function StudentLK() {
                   <div className="font-medium">{l.subjectName || 'Предмет'}</div>
                   <div className="text-sm text-gray-600">{teacherLabel(l.teacher)}</div>
                   <div className="text-sm">{fmtDate.format(new Date(l.startsAt))}</div>
-                  <div className="text-sm">{lDuration(l)} мин · {fmtMoney.format(lPriceRub(l))}</div>
+                  <div className="text-sm">
+                    {lDuration(l)} мин · {fmtMoney.format(displayRub(l))}
+                  </div>
                 </div>
                 <div className="text-xs uppercase tracking-wide text-green-700 font-semibold">DONE</div>
               </div>
@@ -168,7 +207,6 @@ export default function StudentLK() {
         )}
       </section>
 
-      {/* Единый центр уведомлений (оверлей) */}
       <NotifyCenter />
     </div>
   );

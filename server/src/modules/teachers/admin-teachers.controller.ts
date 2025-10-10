@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Put, Delete,
-  Param, Body, BadRequestException, NotFoundException, UseGuards,
+  Param, Body, BadRequestException, NotFoundException, UseGuards, Patch
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { Roles } from '../common/roles.decorator';
@@ -13,16 +13,102 @@ import { PrismaService } from '../../prisma.service';
 export class AdminTeachersController {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Помощник: по входному id (userId | profileId) вернуть оба id, если возможно */
   private async resolveIds(id: string): Promise<{ userId: string|null; profileId: string|null }> {
     const p: any = this.prisma as any;
+
+    // сначала пробуем как userId
     const u = await p.user.findUnique?.({ where: { id }, select: { id: true } });
     if (u?.id) {
-      const prof = await p.teacherProfile?.findUnique?.({ where: { userId: u.id }, select: { id: true, userId: true } });
+      const prof = await p.teacherProfile?.findUnique?.({
+        where: { userId: u.id },
+        select: { id: true, userId: true },
+      });
       return { userId: u.id, profileId: prof?.id ?? null };
     }
-    const prof2 = await p.teacherProfile?.findUnique?.({ where: { id }, select: { id: true, userId: true } });
+
+    // иначе — как profileId
+    const prof2 = await p.teacherProfile?.findUnique?.({
+      where: { id },
+      select: { id: true, userId: true },
+    });
     if (prof2?.id) return { userId: prof2.userId, profileId: prof2.id };
+
     return { userId: null, profileId: null };
+  }
+
+  /** Установить/обновить фото преподавателя (url — строка) */
+  @Patch(':id/photo')
+  async setPhoto(
+    @Param('id') id: string,
+    @Body() body: { url: string }
+  ) {
+    const url = (body?.url || '').trim();
+    if (!url) throw new BadRequestException('url required');
+
+    const p: any = this.prisma as any;
+    const { userId, profileId } = await this.resolveIds(id);
+
+    if (!userId && !profileId) {
+      throw new BadRequestException('teacher_not_found');
+    }
+
+    // Стратегия:
+    // - если есть upsert по userId — используем его (самый надёжный путь)
+    // - иначе пытаемся update по userId
+    // - если нет — update по profileId
+    // - если профиля ещё нет — создаём его с photo
+    try {
+      if (p.teacherProfile?.upsert && userId) {
+        const res = await p.teacherProfile.upsert({
+          where: { userId },
+          create: { userId, photo: url },
+          update: { photo: url },
+          select: { id: true, userId: true, photo: true },
+        });
+        return { ok: true, id: res.id, userId: res.userId, photo: res.photo };
+      }
+
+      if (p.teacherProfile?.update) {
+        if (userId) {
+          const res = await p.teacherProfile.update({
+            where: { userId },
+            data: { photo: url },
+            select: { id: true, userId: true, photo: true },
+          });
+          return { ok: true, id: res.id, userId: res.userId, photo: res.photo };
+        }
+        if (profileId) {
+          const res = await p.teacherProfile.update({
+            where: { id: profileId },
+            data: { photo: url },
+            select: { id: true, userId: true, photo: true },
+          });
+          return { ok: true, id: res.id, userId: res.userId, photo: res.photo };
+        }
+      }
+
+      if (p.teacherProfile?.create && userId) {
+        const created = await p.teacherProfile.create({
+          data: { userId, photo: url },
+          select: { id: true, userId: true, photo: true },
+        });
+        return { ok: true, id: created.id, userId: created.userId, photo: created.photo };
+      }
+    } catch (e) {
+      // если update по userId не сработал из-за отсутствия записи — пробуем создать
+      if (p.teacherProfile?.create && userId) {
+        const created = await p.teacherProfile.create({
+          data: { userId, photo: url },
+          select: { id: true, userId: true, photo: true },
+        });
+        return { ok: true, id: created.id, userId: created.userId, photo: created.photo };
+      }
+      throw e;
+    }
+
+    // если почему-то ни один путь не доступен
+    throw new BadRequestException('teacher_profile_write_failed');
   }
 
   @Get()
@@ -33,9 +119,16 @@ export class AdminTeachersController {
         const rows = await p.teacherProfile.findMany({
           include: { user: { select: { id: true, login: true, firstName: true, lastName: true, role: true } } },
         });
-        if (rows?.length) return rows.map((r: any) => ({ id: r.id, userId: r.userId ?? r.user?.id, user: r.user }));
+        if (rows?.length) {
+          return rows.map((r: any) => ({
+            id: r.id,
+            userId: r.userId ?? r.user?.id,
+            user: r.user,
+          }));
+        }
       }
     } catch {}
+
     try {
       if (p.teacherSubject?.findMany) {
         const rows = await p.teacherSubject.findMany({
@@ -43,11 +136,17 @@ export class AdminTeachersController {
         });
         const seen = new Set<string>();
         const items = rows
-          .filter((r: any) => { const k = r.teacherId || r.teacher?.id; if (!k || seen.has(k)) return false; seen.add(k); return true; })
+          .filter((r: any) => {
+            const k = r.teacherId || r.teacher?.id;
+            if (!k || seen.has(k)) return false;
+            seen.add(k);
+            return true;
+          })
           .map((r: any) => ({ id: r.teacherId || r.teacher?.id, userId: r.teacherId || r.teacher?.id, user: r.teacher }));
         if (items.length) return items;
       }
     } catch {}
+
     const users = await this.prisma.user.findMany({
       where: { role: 'teacher' } as any,
       select: { id: true, login: true, firstName: true, lastName: true, role: true } as any,
@@ -70,7 +169,12 @@ export class AdminTeachersController {
     let prof: any = null;
     try {
       if (p.teacherProfile?.upsert) {
-        prof = await p.teacherProfile.upsert({ where: { userId }, create: { userId }, update: {}, select: { id: true, userId: true } });
+        prof = await p.teacherProfile.upsert({
+          where: { userId },
+          create: { userId },
+          update: {},
+          select: { id: true, userId: true },
+        });
       } else if (p.teacherProfile?.findUnique || p.teacherProfile?.create) {
         const old = await p.teacherProfile?.findUnique?.({ where: { userId }, select: { id: true, userId: true } });
         prof = old || (await p.teacherProfile?.create?.({ data: { userId }, select: { id: true, userId: true } }));
@@ -131,7 +235,7 @@ export class AdminTeachersController {
         balance: user.balance, createdAt: user.createdAt,
       },
       aboutShort: user.teacherProfile?.aboutShort ?? null,
-      photo: user.teacherProfile?.photo ?? null,
+      photo: user.teacherProfile?.photo ?? null, // ← это поле мы обновляем в PATCH /:id/photo
       teacherSubjects,
       contactVk: user.teacherProfile?.contactVk ?? null,
       contactTelegram: user.teacherProfile?.contactTelegram ?? null,
@@ -202,7 +306,7 @@ export class AdminTeachersController {
             duration: Number(r?.duration ?? r?.durationMin ?? 60),
           });
         }
-        const data = [...unique.values()];
+        const data = [...unique.values()]; // без дублей
         if (data.length) await p.teacherSubject.createMany({ data });
       } else if (p.teacherProfile?.update) {
         const normalized = arr

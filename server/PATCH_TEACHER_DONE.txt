@@ -1,0 +1,22 @@
+
+// Вставить внутри метода done, перед проверкой баланса студента:
+
+  let teacherPrice = Number(lesson.price || 0);
+  let publicPrice = teacherPrice;
+  try {
+    const { PricingService } = await import('../pricing/pricing.service');
+    const svc = new (PricingService as any)();
+    const item = await svc.resolve(String(lesson.teacherId), (lesson as any).subjectId || undefined);
+    if (item && Number.isFinite(item.publicPrice) && item.publicPrice >= teacherPrice) {
+      publicPrice = Number(item.publicPrice);
+    }
+  } catch {}
+
+  if ((student.balance ?? 0) < publicPrice) {
+    throw new BadRequestException('Insufficient student balance');
+  }
+
+  const schoolFee = Math.max(0, publicPrice - teacherPrice);
+
+// В транзакции замените decrement у студента на publicPrice, а increment у преподавателя на teacherPrice.
+// Добавьте аналитическую запись о комиссии (delta: 0, reason: School fee ...).

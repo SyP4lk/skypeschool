@@ -1,3 +1,4 @@
+const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
 "use client";
 
 import { useEffect, useState } from "react";
@@ -19,7 +20,7 @@ export default function TeachersAdminPage() {
   const [teachers, setTeachers] = useState<TeacherForAdmin[]>([]);
 
   useEffect(() => {
-    fetch(`/api/admin/teachers`, {
+    fetch(`${API}/admin/teachers`, {
       credentials: "include",
     })
       .then((res) => res.json())

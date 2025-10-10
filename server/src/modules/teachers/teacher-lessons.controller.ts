@@ -141,34 +141,53 @@ export class TeacherLessonsController {
   @Roles('teacher')
   async done(@Req() req: any, @Param('id') id: string) {
     const teacherId = req.user.sub as string;
-    const lesson = await (this.prisma as any).lesson.findUnique({ where: { id } });
-    if (!lesson || lesson.teacherId !== teacherId) throw new BadRequestException('lesson not found');
 
+    const lesson = await (this.prisma as any).lesson.findUnique({ where: { id } });
+    if (!lesson || lesson.teacherId !== teacherId) {
+      throw new BadRequestException('lesson not found');
+    }
     if (lesson.status === 'completed') return lesson;
 
     const student = await this.prisma.user.findUnique({ where: { id: lesson.studentId } });
     const teacher = await this.prisma.user.findUnique({ where: { id: teacherId } });
     if (!student || !teacher) throw new BadRequestException('participants missing');
 
-    if ((student.balance ?? 0) < (lesson.price ?? 0)) {
+    // 1) teacherPrice — как и раньше лежит в Lesson.price (КОПЕЙКИ)
+    const teacherPrice = Number(lesson.price ?? 0);
+
+    // 2) billPrice — сколько списываем с ученика: publicPrice (если есть), иначе fallback = teacherPrice
+    const pricing = await (this.prisma as any).pricing.findUnique({
+      where: { pricing_unique_pair: { teacherId, subjectId: lesson.subjectId } },
+    }).catch(() => null);
+
+    const billPrice = Number(pricing?.publicPrice ?? teacherPrice);
+
+    if ((student.balance ?? 0) < billPrice) {
       throw new BadRequestException('Insufficient student balance');
     }
 
     const res = await (this.prisma as any).$transaction(async (tx: any) => {
-      await tx.user.update({ where: { id: student.id }, data: { balance: { decrement: lesson.price } } });
-      await tx.user.update({ where: { id: teacher.id }, data: { balance: { increment: lesson.price } } });
+      // списываем с ученика ПУБЛИЧНУЮ цену
+      await tx.user.update({
+        where: { id: student.id },
+        data: { balance: { decrement: billPrice } },
+      });
 
-      // Пишем в журнал (минимальная форма BalanceChange)
+      // начисляем учителю цену БЕЗ комиссии
+      await tx.user.update({
+        where: { id: teacher.id },
+        data: { balance: { increment: teacherPrice } },
+      });
+
+      // журнал (по желанию можно добавить третью запись с доходом школы = billPrice - teacherPrice)
       try {
         await tx.balanceChange.createMany({
           data: [
-            { userId: student.id, delta: -Number(lesson.price || 0), reason: `Lesson charge ${lesson.id}` },
-            { userId: teacher.id, delta:  Number(lesson.price || 0), reason: `Lesson income ${lesson.id}` },
+            { userId: student.id, delta: -billPrice,    reason: `Lesson charge ${lesson.id}` },
+            { userId: teacher.id, delta:  teacherPrice, reason: `Lesson income ${lesson.id}` },
           ],
         });
-      } catch (_) {
-        // если модель другая — молча пропускаем
-      }
+      } catch {}
 
       return tx.lesson.update({ where: { id: lesson.id }, data: { status: 'completed' } });
     });

@@ -14,7 +14,10 @@ import { ArticlesModule } from './modules/articles/articles.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { WithdrawalsModule } from './modules/withdrawals/withdrawals.module';
+import { PricingModule } from './modules/pricing/pricing.module';
 import { SupportModule } from './modules/support/support.module';
+import { UploadModule } from './modules/upload/upload.module';
+
 
 @Module({
   imports: [
@@ -22,6 +25,10 @@ import { SupportModule } from './modules/support/support.module';
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'public'),
       serveRoot: '/public',
+    }),
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'uploads'),
+      serveRoot: '/uploads',
     }),
 
     AuthModule,
@@ -37,6 +44,8 @@ import { SupportModule } from './modules/support/support.module';
     SettingsModule,
     WithdrawalsModule,
     SupportModule,
+    PricingModule,
+    UploadModule,
   ],
 })
 export class AppModule {}

@@ -51,16 +51,33 @@ export class StudentMeController {
     } catch {
       rows = [];
     }
-    return rows.map((r: any) => ({
-      id: r.id,
-      startsAt: r.startsAt,
-      duration: r.duration ?? r.durationMin ?? null,
-      durationMin: r.duration ?? r.durationMin ?? null,
-      price: Number(r.price ?? 0),
-      status: normalizeStatus(r.status),
-      subjectName: r.subject?.name ?? null,
-      teacher: r.teacher ? { id: r.teacher.id, login: r.teacher.login, firstName: r.teacher.firstName, lastName: r.teacher.lastName } : null,
-    }));
+    const lessons = rows as any[];
+
+    const result = [];
+    for (const l of lessons) {
+      // по умолчанию показываем цену из урока (цена для преподавателя)
+      let displayPrice = Number(l.price || 0);
+
+      // пробуем получить публичную цену из прайсинга
+      try {
+        const { PricingService } = await import('../pricing/pricing.service');
+        const svc = new (PricingService as any)();
+        const item = await svc.resolve(String(l.teacherId), l.subjectId || undefined);
+        if (item && Number.isFinite(item.publicPrice) && item.publicPrice >= displayPrice) {
+          displayPrice = Number(item.publicPrice);
+        }
+      } catch { /* если модуля/таблицы нет — просто оставим исходную цену */ }
+
+      result.push({
+        ...l,
+        subjectName: l?.subject?.name ?? l?.subjectName ?? null,
+        subjectId: l?.subject?.id ?? l?.subjectId ?? null,
+        displayPrice, // ← НОВОЕ ПОЛЕ (копейки)
+      });
+    }
+
+    return result;
+
   }
 
   /** Public topup instructions for Student LK
