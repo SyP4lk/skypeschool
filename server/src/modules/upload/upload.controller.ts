@@ -7,10 +7,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-
-// CommonJS-импорт без esModuleInterop
-import multer = require('multer');
-
+import * as multer from 'multer';            // ← ключевая правка
 import type { Request } from 'express';
 import { existsSync, mkdirSync } from 'fs';
 import { join, extname } from 'path';
