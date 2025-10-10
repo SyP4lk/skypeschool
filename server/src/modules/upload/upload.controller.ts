@@ -7,7 +7,10 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import * as multer from 'multer';            // ← ключевая правка
+
+// ВАЖНО: дефолт + именованный импорт
+import multer, { diskStorage } from 'multer';
+
 import type { Request } from 'express';
 import { existsSync, mkdirSync } from 'fs';
 import { join, extname } from 'path';
@@ -24,7 +27,7 @@ export class UploadController {
   @Post(':id/photo')
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: multer.diskStorage({
+      storage: diskStorage({
         destination: (
           _req: Request,
           _file: Express.Multer.File,
@@ -45,10 +48,10 @@ export class UploadController {
         },
       }),
 
-      // ⚠️ Без жёстких типов у cb, и без Error — только (null, accept)
+      // Без жёстких типов (совместимо со всеми версиями типов Multer)
       fileFilter: (_req, file, cb) => {
-        const ok = /image\/(jpeg|png|webp|gif)/i.test(file.mimetype);
-        cb(null, ok); // true — принять, false — отклонить
+        const ok = /image\/(jpe?g|png|webp|gif)/i.test(file.mimetype);
+        cb(null, ok);
       },
 
       limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
