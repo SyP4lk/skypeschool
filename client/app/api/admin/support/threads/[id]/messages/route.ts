@@ -18,9 +18,10 @@ function contentType(res: Response) {
 }
 
 /** GET /api/admin/support/threads/[id]/messages */
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, ctx: any) {
+  const { id } = (ctx?.params || {}) as { id: string };
   const url = new URL(req.url);
-  const target = `${API}/admin/support/threads/${encodeURIComponent(params.id)}/messages${url.search}`;
+  const target = `${API}/admin/support/threads/${encodeURIComponent(id)}/messages${url.search}`;
 
   const r = await fetch(target, {
     method: 'GET',
@@ -34,18 +35,18 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 }
 
 /** POST /api/admin/support/threads/[id]/messages */
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, ctx: any) {
+  const { id } = (ctx?.params || {}) as { id: string };
   const url = new URL(req.url);
-  const target = `${API}/admin/support/threads/${encodeURIComponent(params.id)}/messages${url.search}`;
+  const target = `${API}/admin/support/threads/${encodeURIComponent(id)}/messages${url.search}`;
 
-  // важный момент для node-fetch в Next: duplex:'half' при проксировании body
   const r = await fetch(target, {
     method: 'POST',
     headers: forwardHeaders(req),
-    body: req.body,
+    body: req.body,           // прокидываем поток тела
     cache: 'no-store',
     redirect: 'manual',
-    // @ts-expect-error — duplex есть в RequestInit у Node 18, TS может ругаться
+    // @ts-expect-error — duplex есть в Node 18, TS может ругаться
     duplex: 'half',
   });
 
