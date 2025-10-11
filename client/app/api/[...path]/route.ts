@@ -1,6 +1,15 @@
+// app/api/[...path]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
-const SERVER_API = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+type Params = { path?: string[] };
+
+const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/+$/, '');
+
+function ensureBackend(target: string) {
+  if (/^https?:\/\/(localhost|127\.0\.0\.1):3000\b/i.test(target)) {
+    throw new Error('Misconfigured NEXT_PUBLIC_API_URL: points to frontend (:3000). Must point to backend (:3001)/api.');
+  }
+}
 
 function forwardHeaders(req: NextRequest) {
   const h = new Headers();
@@ -11,50 +20,53 @@ function forwardHeaders(req: NextRequest) {
   return h;
 }
 
-function buildTarget(req: NextRequest, ctx: any) {
-  const segs: string[] = Array.isArray(ctx?.params?.path) ? ctx.params.path : [];
-  // если случайно прилетит первый сегмент "api" — уберём
-  const clean = segs[0] === 'api' ? segs.slice(1) : segs;
-  if (!SERVER_API) throw new Error('NEXT_PUBLIC_API_URL is not set');
-  return `${SERVER_API}/${clean.join('/')}${req.nextUrl.search || ''}`;
+function copySetCookie(upstream: Response, headers: Headers) {
+  // next runtime поддерживает getSetCookie()
+  const anyHeaders = upstream.headers as any;
+  const cookies: string[] =
+    (typeof anyHeaders.getSetCookie === 'function' ? anyHeaders.getSetCookie() : null) ||
+    (upstream.headers.get('set-cookie') ? [String(upstream.headers.get('set-cookie'))] : []);
+  for (const c of cookies) headers.append('set-cookie', c);
 }
 
-function makeHeaders(from: Response) {
-  const out = new Headers();
-  out.set('content-type', from.headers.get('content-type') || 'application/json; charset=utf-8');
-  // проброс Set-Cookie (в большинстве окружений приходит одной строкой)
-  const sc = from.headers.get('set-cookie');
-  if (sc) out.set('set-cookie', sc);
-  return out;
+async function buildTarget(req: NextRequest, paramsPromise: Promise<Params>) {
+  const { path = [] } = await paramsPromise; // обязательно await
+  const search = req.nextUrl.search || '';
+  // Вырезаем возможный префикс api, чтобы не задвоить
+  const clean = path.join('/').replace(/^api\/?/, '');
+  const target = `${API}/${clean}${search}`;
+  ensureBackend(target);
+  return target;
 }
 
-async function pass(method: string, req: NextRequest, ctx: any) {
-  const target = buildTarget(req, ctx);
-  const hasBody = method !== 'GET' && method !== 'HEAD';
-
+async function pass(method: string, req: NextRequest, ctx: { params: Promise<Params> }) {
+  const target = await buildTarget(req, ctx.params);
+  const hasBody = !['GET', 'HEAD'].includes(method);
   const init: RequestInit = {
     method,
     headers: forwardHeaders(req),
     cache: 'no-store',
     redirect: 'manual',
   };
-
   if (hasBody) {
-    (init as any).body = req.body;
-    // важно для Node 18/Next при проксировании тела
-    (init as any).duplex = 'half';
+    // прокидываем поток тела запроса
+    (init as any).duplex = 'half'; // нужно для node fetch при передаче body-стрима
+    init.body = req.body as any;
   }
 
   const upstream = await fetch(target, init);
   const text = await upstream.text();
-  const headers = makeHeaders(upstream);
+  const ct = upstream.headers.get('content-type') || 'application/json; charset=utf-8';
 
-  return new NextResponse(text, { status: upstream.status, headers });
+  const out = new Headers({ 'content-type': ct });
+  copySetCookie(upstream, out);
+
+  return new NextResponse(text, { status: upstream.status, headers: out });
 }
 
-export async function GET(req: NextRequest, ctx: any)    { return pass('GET', req, ctx); }
-export async function POST(req: NextRequest, ctx: any)   { return pass('POST', req, ctx); }
-export async function PUT(req: NextRequest, ctx: any)    { return pass('PUT', req, ctx); }
-export async function PATCH(req: NextRequest, ctx: any)  { return pass('PATCH', req, ctx); }
-export async function DELETE(req: NextRequest, ctx: any) { return pass('DELETE', req, ctx); }
-export async function OPTIONS(req: NextRequest, ctx: any){ return pass('OPTIONS', req, ctx); }
+export async function GET(req: NextRequest, ctx: { params: Promise<Params> })    { return pass('GET', req, ctx); }
+export async function POST(req: NextRequest, ctx: { params: Promise<Params> })   { return pass('POST', req, ctx); }
+export async function PUT(req: NextRequest, ctx: { params: Promise<Params> })    { return pass('PUT', req, ctx); }
+export async function PATCH(req: NextRequest, ctx: { params: Promise<Params> })  { return pass('PATCH', req, ctx); }
+export async function DELETE(req: NextRequest, ctx: { params: Promise<Params> }) { return pass('DELETE', req, ctx); }
+export async function OPTIONS(req: NextRequest, ctx: { params: Promise<Params> }){ return pass('OPTIONS', req, ctx); }
