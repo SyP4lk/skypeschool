@@ -8,6 +8,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/* === Базовые enum'ы ролей и статусов === */
 enum Role {
   admin
   teacher
@@ -27,21 +28,8 @@ enum LessonChannel {
   telegram
   other
 }
-model Pricing {
-  id           String   @id @default(uuid())
-  teacherId    String
-  subjectId    String
-  teacherPrice Int      // цена учителю (копейки)
-  publicPrice  Int      // цена для ученика (копейки)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
 
-  @@unique([teacherId, subjectId], name: "pricing_unique_pair")
-}
-/**
- * Типы финансовых операций для журнала.
- * (Журнал остаётся в BalanceChange, просто добавили type/meta)
- */
+/** Типы финансовых операций */
 enum TxType {
   deposit           // + студенту (ручное пополнение админом)
   lesson_charge     // - студенту (списание за проведённый урок)
@@ -58,86 +46,110 @@ enum WithdrawStatus {
   rejected
 }
 
-model User {
-  id           String   @id @default(uuid())
-  login        String   @unique
-  /* Новые поля под регистрацию/People */
-  email        String?  @unique
-  phone        String?  @unique
+/** Статусы для инбокса (поддержка/пробные заявки) */
+enum InboxStatus {
+  new
+  processed
+}
 
-  passwordHash String
-  role         Role
-  firstName    String?
-  lastName     String?
-  tz           String   @default("Europe/Warsaw")
-  balance      Int      @default(0)
+/** Роль автора сообщения поддержки (для тредов) */
+enum SupportRole {
+  user
+  admin
+}
+
+/* === Модели === */
+
+model Pricing {
+  id           String   @id @default(uuid())
+  teacherId    String
+  subjectId    String
+  teacherPrice Int      // цена учителю (копейки)
+  publicPrice  Int      // цена для ученика (копейки)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  @@unique([teacherId, subjectId], name: "pricing_unique_pair")
+}
+
+model User {
+  id            String           @id @default(uuid())
+  login         String           @unique
+  /* Новые поля под регистрацию/People */
+  email         String?          @unique
+  phone         String?          @unique
+  passwordHash  String
+  role          Role
+  firstName     String?
+  lastName      String?
+  tz            String           @default("Europe/Warsaw")
+  balance       Int              @default(0)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
   /* Профили */
-  teacherProfile   TeacherProfile?
-  studentProfile   StudentProfile?
+  teacherProfile TeacherProfile?
+  studentProfile StudentProfile?
 
   /* Связи уроков */
-  lessonsAsTeacher Lesson[]        @relation("TeacherLessons")
-  lessonsAsStudent Lesson[]        @relation("StudentLessons")
+  lessonsAsTeacher Lesson[] @relation("TeacherLessons")
+  lessonsAsStudent Lesson[] @relation("StudentLessons")
 
   /* Финансы */
   balanceChanges BalanceChange[] @relation("UserBalanceChanges")
   changesMade    BalanceChange[] @relation("AdminBalanceChanges")
 
   /* Заявки на вывод (для преподователя) */
-  withdrawals    Withdrawal[]
+  withdrawals Withdrawal[]
 
   @@index([role])
 }
 
 model TeacherProfile {
-  id              String           @id @default(uuid())
-  user            User             @relation(fields: [userId], references: [id])
-  userId          String           @unique
+  id              String          @id @default(uuid())
+  user            User            @relation(fields: [userId], references: [id])
+  userId          String          @unique
   photo           String?
   aboutShort      String?
   aboutFull       String?
   education       String?
-  isActive        Boolean          @default(true)
-  sortOrder       Int              @default(0)
-  contactVk        String?
-  contactTelegram  String?
-  contactWhatsapp  String?
-  contactZoom      String?
-  contactTeams     String?
-  contactDiscord   String?
-  contactMax       String?
+  isActive        Boolean         @default(true)
+  sortOrder       Int             @default(0)
+  contactVk       String?
+  contactTelegram String?
+  contactWhatsapp String?
+  contactZoom     String?
+  contactTeams    String?
+  contactDiscord  String?
+  contactMax      String?
   teacherSubjects TeacherSubject[]
 }
 
 model StudentProfile {
-  id     String @id @default(uuid())
-  user   User   @relation(fields: [userId], references: [id])
-  userId String @unique
-
+  id             String  @id @default(uuid())
+  user           User    @relation(fields: [userId], references: [id])
+  userId         String  @unique
   // contacts & avatar for admin UI
-  avatar          String?
-  contactSkype    String?
-  contactVk       String?
-  contactGoogle   String?
+  avatar         String?
+  contactSkype   String?
+  contactVk      String?
+  contactGoogle  String?
   contactWhatsapp String?
-  contactMax      String?
-  contactDiscord  String?
+  contactMax     String?
+  contactDiscord String?
 }
 
 model Category {
-  id       String    @id @default(uuid())
+  id       String   @id @default(uuid())
   name     String
   subjects Subject[]
 }
 
 model Subject {
-  id               String   @id @default(uuid())
+  id               String           @id @default(uuid())
   name             String
-  slug             String   @unique
-  category         Category @relation(fields: [categoryId], references: [id])
+  slug             String           @unique
+  category         Category         @relation(fields: [categoryId], references: [id])
   categoryId       String
   descriptionShort String?
   descriptionFull  String?
@@ -145,10 +157,9 @@ model Subject {
   program          Json?
   seoTitle         String?
   seoDescription   String?
-
-  teacherSubjects TeacherSubject[]
-  lessons         Lesson[]
-  trialRequests   TrialRequest[]   @relation(name: "SubjectToTrialRequests")
+  teacherSubjects  TeacherSubject[]
+  lessons          Lesson[]
+  trialRequests    TrialRequest[]   @relation(name: "SubjectToTrialRequests")
 }
 
 model TeacherSubject {
@@ -159,7 +170,6 @@ model TeacherSubject {
   subjectId String
   price     Int
   duration  Int
-
   // При желании можно включить уникальность связки (аккуратно, если уже есть дубликаты):
   // @@unique([teacherId, subjectId, duration])
 }
@@ -174,26 +184,24 @@ model Article {
 }
 
 model Lesson {
-  id          String        @id @default(uuid())
-  teacher     User          @relation("TeacherLessons", fields: [teacherId], references: [id])
+  id          String       @id @default(uuid())
+  teacher     User         @relation("TeacherLessons", fields: [teacherId], references: [id])
   teacherId   String
-  student     User          @relation("StudentLessons", fields: [studentId], references: [id])
+  student     User         @relation("StudentLessons", fields: [studentId], references: [id])
   studentId   String
-  subject     Subject       @relation(fields: [subjectId], references: [id])
+  subject     Subject      @relation(fields: [subjectId], references: [id])
   subjectId   String
   startsAt    DateTime
   duration    Int
-  status      LessonStatus  @default(planned)
+  status      LessonStatus @default(planned)
   channel     LessonChannel
   channelLink String?
   note        String?
 
   /**
-   * Новое поле: цена в копейках.
-   * Фиксируется при создании/первом завершении урока, чтобы история не «плавала»
-   * при изменении тарифов у преподавателя.
+   * Цена в копейках (фиксируется при создании/первом завершении).
    */
-  price       Int?
+  price              Int?
   publicPriceAtCharge Int?
 
   @@index([teacherId, startsAt])
@@ -204,43 +212,29 @@ model BalanceChange {
   id        String   @id @default(uuid())
   user      User     @relation("UserBalanceChanges", fields: [userId], references: [id])
   userId    String
-
   /** Сумма со знаком (копейки) */
   delta     Int
-
   /** Комментарий/причина (оставляем совместимость с фронтом) */
   reason    String?
-
   /** Админ, который произвёл изменение (если применимо) */
   admin     User?    @relation("AdminBalanceChanges", fields: [adminId], references: [id])
   adminId   String?
-
-  /** Новый тип операции (см. TxType) */
+  /** Тип операции (см. TxType) */
   type      TxType?
-
   /** Любые дополнительные данные/линки (например, { lessonId, withdrawalId }) */
   meta      Json?
-
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
   @@index([type])
 }
 
-/** Статусы для форм обратной связи/заявок на пробный */
-enum InboxStatus {
-  new
-  processed
-}
-
 model TrialRequest {
-  id        String  @id @default(uuid())
+  id        String      @id @default(uuid())
   name      String
   contact   String?
   subjectId String?
-
-  subject Subject? @relation(name: "SubjectToTrialRequests", fields: [subjectId], references: [id])
-
+  subject   Subject?    @relation(name: "SubjectToTrialRequests", fields: [subjectId], references: [id])
   message   String?
   status    InboxStatus @default(new)
   createdAt DateTime    @default(now())
@@ -248,41 +242,44 @@ model TrialRequest {
   @@index([status, createdAt])
 }
 
+/**
+ * Сообщения поддержки с тредами.
+ * Добавлены поля threadId, role, clientKey + индексы.
+ */
 model SupportMessage {
-  id        String      @id @default(uuid())
-  fromLogin String?
-  contact   String?
-  message   String
-  status    InboxStatus @default(new)
-  createdAt DateTime    @default(now())
+  id         String       @id @default(uuid())
+  fromLogin  String?
+  contact    String?
+  message    String
+  status     InboxStatus  @default(new)
+  createdAt  DateTime     @default(now())
+
+  // --- новые поля для тредов/ролей ---
+  threadId   String?
+  role       SupportRole  @default(user)
+  clientKey  String?
 
   @@index([status, createdAt])
+  @@index([threadId])
+  @@index([threadId, createdAt], name: "SupportMessage_threadId_createdAt_idx")
 }
 
-/**
- * Новая модель: заявки на вывод у преподавателей.
- */
+/** Заявки на вывод у преподавателей */
 model Withdrawal {
-  id         String         @id @default(uuid())
-  teacher    User           @relation(fields: [teacherId], references: [id])
+  id         String          @id @default(uuid())
+  teacher    User            @relation(fields: [teacherId], references: [id])
   teacherId  String
   amount     Int
   notes      String?
-  status     WithdrawStatus @default(pending)
-  createdAt  DateTime       @default(now())
+  status     WithdrawStatus  @default(pending)
+  createdAt  DateTime        @default(now())
   resolvedAt DateTime?
 
   @@index([status, createdAt])
 }
 
-/**
- * Простые системные настройки (ключ-значение).
- * Используем ключ 'topup_instructions' для текста «Как пополнить».
- */
+/** Простые системные настройки (ключ-значение). */
 model Setting {
   key   String @id
   value String
 }
-
-
-
