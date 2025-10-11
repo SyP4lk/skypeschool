@@ -3,7 +3,20 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import './admin.css';
-import { api } from '../_lib/api';
+
+// Локальный хелпер API: всегда через фронтовый прокси '/api'
+async function api(path: string, init?: RequestInit) {
+  const url =
+    path.startsWith('/api')
+      ? path
+      : `/api${path.startsWith('/') ? path : `/${path}`}`;
+
+  return fetch(url, {
+    credentials: 'include',
+    headers: { accept: 'application/json', ...(init?.headers || {}) },
+    ...init,
+  });
+}
 
 const Link = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <a
@@ -32,10 +45,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     async function guard() {
       setReady(false);
       try {
-        const res = await api('/auth/me');;
+        const res = await api('/auth/me');
+        if (aborted) return;
 
         if (res.status === 401 || !res.ok) {
-          if (!aborted) router.replace('/login');
+          router.replace('/login');
           return;
         }
 
@@ -43,14 +57,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         const role: string | undefined = data?.user?.role ?? data?.role;
 
         if (role !== 'admin') {
-          if (!aborted) {
-            if (role === 'teacher') router.replace('/lk/teacher');
-            else router.replace('/lk/student');
-          }
+          if (role === 'teacher') router.replace('/lk/teacher');
+          else router.replace('/lk/student');
           return;
         }
 
-        if (!aborted) setReady(true);
+        setReady(true);
       } catch {
         if (!aborted) router.replace('/login');
       }
