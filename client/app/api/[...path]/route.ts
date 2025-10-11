@@ -1,57 +1,77 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+const SERVER_API = (process.env.SERVER_API_URL || '').replace(/\/+$/, '');
+if (!SERVER_API) {
+  // Чтобы 500 не был «тихим»
+  console.warn('SERVER_API_URL is not set. Set it to https://<server>/api');
+}
 
-const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/+$/, '');
+type Ctx = { params: { path?: string[] } };
 
-type Params = { path?: string[] };
+function buildTarget(req: NextRequest, pathSegs: string[] | undefined) {
+  const segs = Array.isArray(pathSegs) ? pathSegs : [];
+  // наш локальный роут начинается с /api, убираем первый сегмент "api" если он затесался
+  const clean = segs[0] === 'api' ? segs.slice(1) : segs;
+  const search = req.nextUrl.search || '';
+  if (!SERVER_API) throw new Error('SERVER_API_URL is not configured');
+  return `${SERVER_API}/${clean.join('/')}${search}`;
+}
 
-function ensureBackend(target: string) {
-  if (/^https?:\/\/(localhost|127\.0\.0\.1):3000\b/i.test(target)) {
-    throw new Error('Misconfigured NEXT_PUBLIC_API_URL: points to frontend :3000. Must be backend :3001/api.');
+function forwardHeaders(req: NextRequest) {
+  const out = new Headers();
+  // важные заголовки
+  for (const h of ['authorization', 'content-type', 'cookie']) {
+    const v = req.headers.get(h);
+    if (v) out.set(h, v);
   }
+  return out;
 }
 
-function fwd(req: NextRequest) {
-  const h: Record<string,string> = {};
-  for (const k of ['authorization','content-type','cookie']) {
-    const v = req.headers.get(k); if (v) h[k] = v;
+function copySetCookieAndType(from: Response) {
+  const headers = new Headers();
+  const ct = from.headers.get('content-type') || 'application/json; charset=utf-8';
+  headers.set('content-type', ct);
+
+  // пробрасываем Set-Cookie (их может быть несколько)
+  const setCookies = from.headers.getSetCookie?.() ?? [];
+  if (setCookies.length) {
+    // NextResponse сам умеет массивом
+    headers.append('set-cookie', setCookies.join(', '));
+  } else {
+    // fallback для окружений без getSetCookie
+    const sc = from.headers.get('set-cookie');
+    if (sc) headers.append('set-cookie', sc);
   }
-  return h;
+  return headers;
 }
 
-async function url(req: NextRequest, params: Promise<Params>) {
-  const { path = [] } = await params; // await обязательно
-  const s = req.nextUrl.search || '';
-  const u = `${API}/${path.join('/')}${s}`;
-  ensureBackend(u);
-  return u;
-}
+async function pass(method: string, req: NextRequest, ctx: Ctx) {
+  const target = buildTarget(req, ctx.params.path);
+  const hasBody = !['GET', 'HEAD'].includes(method);
 
-async function pass(method: string, req: NextRequest, ctx: { params: Promise<Params> }) {
-  const target = await url(req, ctx.params);
-  const hasBody = !['GET','HEAD'].includes(method);
-
-  const init: RequestInit & { duplex?: 'half' } = {
+  const init: RequestInit = {
     method,
-    headers: fwd(req),
+    headers: forwardHeaders(req),
     cache: 'no-store',
     redirect: 'manual',
   };
-  if (hasBody) { init.body = req.body as any; init.duplex = 'half'; }
 
-  const r = await fetch(target, init);
+  if (hasBody) {
+    // важно: проксируем поток тела и ставим duplex: 'half'
+    (init as any).body = req.body;
+    (init as any).duplex = 'half';
+  }
 
-  const rh = new Headers();
-  r.headers.forEach((v,k)=>rh.set(k,v));
+  const upstream = await fetch(target, init);
+  const bodyText = await upstream.text();
+  const headers = copySetCookieAndType(upstream);
 
-  return new NextResponse(r.body, { status: r.status, headers: rh });
+  return new NextResponse(bodyText, { status: upstream.status, headers });
 }
 
-export const GET = (req: NextRequest, ctx: any)=>pass('GET', req, ctx);
-export const POST = (req: NextRequest, ctx: any)=>pass('POST', req, ctx);
-export const PUT = (req: NextRequest, ctx: any)=>pass('PUT', req, ctx);
-export const PATCH = (req: NextRequest, ctx: any)=>pass('PATCH', req, ctx);
-export const DELETE = (req: NextRequest, ctx: any)=>pass('DELETE', req, ctx);
-export const OPTIONS = (req: NextRequest, ctx: any)=>pass('OPTIONS', req, ctx);
+export async function GET(req: NextRequest, ctx: Ctx)   { return pass('GET', req, ctx); }
+export async function POST(req: NextRequest, ctx: Ctx)  { return pass('POST', req, ctx); }
+export async function PUT(req: NextRequest, ctx: Ctx)   { return pass('PUT', req, ctx); }
+export async function PATCH(req: NextRequest, ctx: Ctx) { return pass('PATCH', req, ctx); }
+export async function DELETE(req: NextRequest, ctx: Ctx){ return pass('DELETE', req, ctx); }
+export async function OPTIONS(req: NextRequest, ctx: Ctx){ return pass('OPTIONS', req, ctx); }
