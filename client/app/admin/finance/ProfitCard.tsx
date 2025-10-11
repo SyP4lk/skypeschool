@@ -1,179 +1,155 @@
-// PATCH: 2025-09-28
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
-function fmt(kopecks: number) {
-  const rub = Number(kopecks || 0) / 100;
-  return rub.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 2 });
+type ProfitSubject = {
+  subject: string;
+  total: number;   // копейки
+  count: number;
+};
+
+type ProfitResponse = {
+  total: number;   // копейки
+  lessons: number;
+  avgFee: number;  // копейки
+  bySubject?: ProfitSubject[];
+  from?: string;
+  to?: string;
+  // допустим бэк может вернуть ещё поля — не критично
+};
+
+function toYMD(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
-// Надёжная база API
-// API base fixed to proxy
-function getApiBase(){ return '/api'; }
-  return 'http://localhost:3001/api';
+function formatRub(cents: number) {
+  const rub = (cents ?? 0) / 100;
+  return rub.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 2 });
 }
 
 export default function ProfitCard() {
-  const [from, setFrom] = useState<string>('');
-  const [to, setTo] = useState<string>('');
-  const [data, setData] = useState<any | null>(null);
+  // дефолт: последние 30 дней
+  const today = useMemo(() => new Date(), []);
+  const [from, setFrom] = useState<string>(() => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - 30);
+    return toYMD(d);
+  });
+  const [to, setTo] = useState<string>(() => toYMD(today));
+
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | undefined>();
-  const apiBase = useMemo(getApiBase, []);
-
-  const presets = useMemo(
-    () => [
-      { label: '7 дней', range: 7 },
-      { label: '30 дней', range: 30 },
-      { label: 'Квартал', range: 90 },
-    ],
-    []
-  );
-
-  // Дебаунс запросов при ручном вводе дат
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  function triggerLoadDebounced() {
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => {
-      void load(); // fire and forget
-    }, 300);
-  }
+  const [err, setErr] = useState<string | null>(null);
+  const [data, setData] = useState<ProfitResponse | null>(null);
 
   async function load() {
-    // Валидируем перед запросом
-    if (!from || !to) return;
-    if (from > to) {
-      setErr('Дата "от" больше даты "до"');
-      setData(null);
-      return;
-    }
-
-    setErr(undefined);
     setLoading(true);
+    setErr(null);
     try {
-      const qs = new URLSearchParams();
-      qs.set('from', from);
-      qs.set('to', to);
-
-      const url = `${apiBase}/admin/finance/profit?${qs.toString()}`;
-      const res = await fetch(url, { method: 'GET', credentials: 'include', cache: 'no-store' });
-
-      // Попробуем распарсить JSON, даже если статус не 2xx
-      let j: any = null;
-      try {
-        j = await res.json();
-      } catch {
-        /* ignore */
-      }
-
+      const params = new URLSearchParams();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      const res = await fetch(`/api/admin/finance/profit?` + params.toString(), {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
+      });
       if (!res.ok) {
-        const msg =
-          (j && (j.message || j.error)) ||
-          `Ошибка запроса (${res.status}${res.statusText ? ` ${res.statusText}` : ''})`;
-        throw new Error(msg);
+        const text = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status} ${res.statusText}${text ? ` — ${text}` : ''}`);
       }
-
-      setData(j);
+      const json = (await res.json()) as ProfitResponse;
+      setData(json);
     } catch (e: any) {
+      setErr(e?.message || 'Не удалось получить данные');
       setData(null);
-      setErr(e?.message || 'Ошибка');
     } finally {
       setLoading(false);
     }
   }
 
-  // Пресеты — выставляем даты, эффект ниже сам подхватит и сделает запрос
-  function usePreset(days: number) {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(end.getDate() - days + 1);
-    const f = start.toISOString().slice(0, 10);
-    const t = end.toISOString().slice(0, 10);
-    setFrom(f);
-    setTo(t);
-  }
-
-  // Автозапрос при изменении дат (с дебаунсом)
   useEffect(() => {
-    if (from && to) triggerLoadDebounced();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [from, to]);
-
-  // При первом монтировании — пресет 7 дней
-  useEffect(() => {
-    if (!from && !to) usePreset(7);
+    // авто-загрузка на первый рендер
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <section className="mb-4 p-3 rounded border">
-      <div className="font-semibold mb-2">Сколько заработала школа</div>
-
-      <div className="flex flex-wrap items-center gap-2 mb-2">
-        {presets.map((p) => (
+    <div className="w-full rounded-2xl border border-gray-200/60 bg-white/70 p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="text-lg font-semibold">Прибыль школы</h3>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            className="rounded-md border px-2 py-1"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            max={to || undefined}
+          />
+          <span className="text-gray-400">—</span>
+          <input
+            type="date"
+            className="rounded-md border px-2 py-1"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            min={from || undefined}
+            max={toYMD(today)}
+          />
           <button
-            key={p.range}
-            type="button"
-            className="px-2 py-1 rounded border"
-            onClick={() => usePreset(p.range)}
+            onClick={load}
             disabled={loading}
+            className="rounded-md bg-black px-3 py-1 text-white disabled:opacity-50"
+            title="Обновить"
           >
-            {p.label}
+            {loading ? 'Загрузка…' : 'Показать'}
           </button>
-        ))}
-
-        <input
-          type="date"
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-          className="rounded border px-2 py-1"
-        />
-        <input
-          type="date"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          className="rounded border px-2 py-1"
-        />
-
-        {/* Индикатор загрузки / ошибки — без alert */}
-        {loading && <span className="text-sm opacity-70">Считаю…</span>}
-        {err && !loading && <span className="text-red-600 text-sm">{String(err)}</span>}
+        </div>
       </div>
 
-      {data && (
-        <div className="text-sm">
-          <div>
-            <span className="opacity-70">Прибыль:</span> <b>{fmt(data.total)}</b>
-          </div>
-          <div className="flex flex-wrap gap-6 mt-1">
-            <div>
-              <span className="opacity-70">Уроков:</span> <b>{data.lessons}</b>
-            </div>
-            <div>
-              <span className="opacity-70">Средняя комиссия:</span> <b>{fmt(data.avgFee)}</b>
-            </div>
-          </div>
-
-          {Array.isArray(data.bySubject) && data.bySubject.length > 0 && (
-            <div className="mt-2">
-              <div className="opacity-70 mb-1">Топ-3 предмета по комиссии</div>
-              <ul className="list-disc pl-5">
-                {data.bySubject.map((s: any) => (
-                  <li key={s.subjectId}>
-                    {s.title} — <b>{fmt(s.fee)}</b>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+      {err && (
+        <div className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {err}
         </div>
       )}
 
-      {/* Пустой стейт — когда дат нет/ошибка/0 уроков */}
-      {!loading && !data && !err && from && to && (
-        <div className="text-sm opacity-70">Нет данных за выбранный период.</div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-gray-100 p-3">
+          <div className="text-xs text-gray-500">Итого прибыль</div>
+          <div className="text-2xl font-semibold">
+            {formatRub(data?.total ?? 0)}
+          </div>
+        </div>
+        <div className="rounded-xl border border-gray-100 p-3">
+          <div className="text-xs text-gray-500">Завершённых уроков</div>
+          <div className="text-2xl font-semibold">{data?.lessons ?? 0}</div>
+        </div>
+        <div className="rounded-xl border border-gray-100 p-3">
+          <div className="text-xs text-gray-500">Средняя комиссия</div>
+          <div className="text-2xl font-semibold">{formatRub(data?.avgFee ?? 0)}</div>
+        </div>
+      </div>
+
+      {!!(data?.bySubject?.length) && (
+        <div className="mt-4">
+          <div className="mb-2 text-sm font-medium text-gray-600">Топ предметов</div>
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+            {data!.bySubject!.map((s, i) => (
+              <div key={i} className="flex items-center justify-between rounded-lg border border-gray-100 p-2">
+                <div className="truncate pr-2 text-sm">{s.subject}</div>
+                <div className="text-sm text-gray-700">
+                  {formatRub(s.total)} <span className="text-gray-400">· {s.count}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
-    </section>
+
+      <div className="mt-3 text-xs text-gray-400">
+        Диапазон: {from} — {to}
+      </div>
+    </div>
   );
 }
