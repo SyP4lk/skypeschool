@@ -7,7 +7,13 @@ const PAGE_SIZE = 12;
 
 const API = '/api';
 const ORIGIN = API.replace(/\/api$/, '');
-const toAbs = (p?: string | null) => (!p ? null : p.startsWith('http') ? p : `${ORIGIN}${p.startsWith('/') ? '' : '/'}${p}`);
+const toAbs = (p?: string | null) =>
+  !p
+    ? null
+    : p.startsWith('http')
+      ? p
+      : // если это файл из /uploads — ведём через /api, иначе как раньше
+        (p.startsWith('/uploads') ? `${API}${p}` : `${ORIGIN}${p.startsWith('/') ? '' : '/'}${p}`);
 
 function formatDate(d: string) {
   const date = new Date(d);
@@ -44,8 +50,14 @@ export default async function Page({ searchParams }: Props) {
   const sp = (await searchParams) ?? {};
   const page = Math.max(1, Number(sp.page || 1) || 1);
 
-  const res = await fetch(`${API}/articles?limit=${PAGE_SIZE}&page=${page}`, { cache: 'no-store' });
-  if (!res.ok) {
+  let res: Response | null = null;
+  try {
+    res = await fetch(`${API}/articles?limit=${PAGE_SIZE}&page=${page}`, { cache: 'no-store' });
+  } catch {
+    // игнор — покажем сообщение ниже
+  }
+
+  if (!res || !res.ok) {
     return (
       <main className="max-w-6xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-6">Интересные статьи</h1>
@@ -53,19 +65,26 @@ export default async function Page({ searchParams }: Props) {
       </main>
     );
   }
-  const data = (await res.json()) as ListResponse;
-  const pages = Math.max(1, Math.ceil((data.total || 0) / (data.limit || PAGE_SIZE)));
+
+  const raw = await res.json() as ListResponse | ArticleCard[];
+  const isArray = Array.isArray(raw);
+
+  const items: ArticleCard[] = isArray ? (raw as ArticleCard[]) : ((raw as ListResponse).items ?? []);
+  const total = isArray ? items.length : ((raw as ListResponse).total ?? items.length);
+  const currentPage = isArray ? page : (Number((raw as ListResponse).page) || page);
+  const limit = isArray ? PAGE_SIZE : (Number((raw as ListResponse).limit) || PAGE_SIZE);
+  const pages = Math.max(1, Math.ceil((total || 0) / (limit || PAGE_SIZE)));
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">Интересные статьи</h1>
 
-      {data.items.length === 0 ? (
+      {items.length === 0 ? (
         <p className="text-gray-600">Пока нет статей.</p>
       ) : (
         <>
           <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {data.items.map((a) => {
+            {items.map((a) => {
               const img = toAbs(a.image);
               return (
                 <li key={a.id} className="border rounded-lg overflow-hidden hover:shadow-sm transition">
@@ -81,7 +100,7 @@ export default async function Page({ searchParams }: Props) {
             })}
           </ul>
 
-          <Pagination page={data.page} pages={pages} />
+          <Pagination page={currentPage} pages={pages} />
         </>
       )}
     </main>

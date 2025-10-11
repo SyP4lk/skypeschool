@@ -2,7 +2,12 @@ import Link from 'next/link';
 
 const API = '/api';
 const ORIGIN = API.replace(/\/api$/, '');
-const toAbs = (p?: string | null) => (!p ? null : p.startsWith('http') ? p : `${ORIGIN}${p.startsWith('/') ? '' : '/'}${p}`);
+const toAbs = (p?: string | null) =>
+  !p
+    ? null
+    : p.startsWith('http')
+      ? p
+      : (p.startsWith('/uploads') ? `${API}${p}` : `${ORIGIN}${p.startsWith('/') ? '' : '/'}${p}`);
 
 type Article = {
   id: string;
@@ -18,9 +23,14 @@ type Props = { params: Promise<{ slug: string }> };
 export default async function Page({ params }: Props) {
   const { slug } = await params;
 
-  const res = await fetch(`${API}/articles/${encodeURIComponent(slug)}`, { cache: 'no-store' });
+  let res: Response | null = null;
+  try {
+    res = await fetch(`${API}/articles/${encodeURIComponent(slug)}`, { cache: 'no-store' });
+  } catch {
+    res = null;
+  }
 
-  if (!res.ok) {
+  if (!res || !res.ok) {
     return (
       <main className="max-w-3xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-4">Статья не найдена</h1>
@@ -29,7 +39,18 @@ export default async function Page({ params }: Props) {
     );
   }
 
-  const a: Article = await res.json();
+  const raw = await res.json() as Article | { item?: Article };
+  const a: Article | null = (raw && (raw as any).item) ? (raw as any).item as Article : (raw as Article);
+
+  if (!a || !a.id) {
+    return (
+      <main className="max-w-3xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold mb-4">Статья не найдена</h1>
+        <Link className="underline text-sm" href="/interesnye-stati">← Вернуться к списку</Link>
+      </main>
+    );
+  }
+
   const paragraphs = (a.content || '')
     .split(/\r?\n\r?\n/)
     .map((s) => s.trim())
