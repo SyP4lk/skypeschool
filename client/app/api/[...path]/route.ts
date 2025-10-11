@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const SERVER_API = (process.env.SERVER_API_URL || '').replace(/\/+$/, '');
+const SERVER_API = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
 
 function forwardHeaders(req: NextRequest) {
   const h = new Headers();
@@ -15,7 +15,7 @@ function buildTarget(req: NextRequest, ctx: any) {
   const segs: string[] = Array.isArray(ctx?.params?.path) ? ctx.params.path : [];
   // если случайно прилетит первый сегмент "api" — уберём
   const clean = segs[0] === 'api' ? segs.slice(1) : segs;
-  if (!SERVER_API) throw new Error('SERVER_API_URL is not set');
+  if (!SERVER_API) throw new Error('NEXT_PUBLIC_API_URL is not set');
   return `${SERVER_API}/${clean.join('/')}${req.nextUrl.search || ''}`;
 }
 
