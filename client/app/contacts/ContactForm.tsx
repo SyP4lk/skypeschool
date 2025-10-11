@@ -11,7 +11,7 @@ export default function ContactForm() {
   const [ok, setOk] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/+$/, '');
+  const API = '/api';
 
   async function post(url: string, body: any) {
     const res = await fetch(url, {

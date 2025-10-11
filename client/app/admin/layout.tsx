@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import './admin.css';
+import { api } from '../_lib/api';
 
 const Link = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <a
@@ -31,10 +32,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     async function guard() {
       setReady(false);
       try {
-        const res = await fetch('/api/auth/me', {
-          credentials: 'include',
-          cache: 'no-store',
-        });
+        const res = await api('/auth/me');;
 
         if (res.status === 401 || !res.ok) {
           if (!aborted) router.replace('/login');

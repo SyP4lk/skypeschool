@@ -6,7 +6,7 @@ import { useRouter, useParams } from 'next/navigation';
 type Article = { id: string; slug: string; title: string; content: string; image?: string | null; createdAt: string };
 
 export default function AdminEditArticlePage() {
-  const api = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+  const api = '/api';
   const params = useParams<{ id: string }>();
   const router = useRouter();
 

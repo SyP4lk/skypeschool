@@ -13,7 +13,7 @@ export default function SignupPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
-    const api = process.env.NEXT_PUBLIC_API_URL!;
+    const api = '/api';
     try {
       const res = await fetch(`${api}/auth/register-student`, {
         method: 'POST',

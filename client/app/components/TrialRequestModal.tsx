@@ -12,7 +12,7 @@ export default function TrialRequestModal({ open, onClose }: { open: boolean; on
 
   if (!open) return null;
 
-  const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/+$/, '');
+  const API = '/api';
 
   async function post(url: string, body: any) {
     const res = await fetch(url, {

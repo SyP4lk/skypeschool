@@ -1,5 +1,5 @@
 "use client";
-const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
+const API = '/api';
 
 
 import { useEffect, useState } from "react";
@@ -55,8 +55,8 @@ export default function EditTeacherPage() {
         setAboutShort(data.aboutShort || "");
         // для предпросмотра устанавливаем полный путь (можно добавить BASE_URL)
         // удаляем суффикс /api у API_URL, если он есть, чтобы получить базовый адрес для изображений
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '')?.replace(/\/api$/, '') ?? '';
-        setPhotoPreview(data.photo ? `${baseUrl}${data.photo}` : null);
+        const _p = data.photo as string | null;
+        setPhotoPreview(_p ? (_p.startsWith('http') ? _p : `/api/${_p.replace(/^\/+/,'')}`) : null);
         // преобразуем teacherSubjects в массив объектов с необходимыми полями
         if (Array.isArray(data.teacherSubjects)) {
           setTeacherSubjects(
@@ -71,30 +71,68 @@ export default function EditTeacherPage() {
       });
   }, [id]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    // собираем FormData для отправки
-    const formData = new FormData();
-    formData.append("firstName", firstName);
-    formData.append("lastName", lastName);
-    formData.append("aboutShort", aboutShort);
-    formData.append("teacherSubjects", JSON.stringify(teacherSubjects));
+  async 
+async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault();
+  setError(null);
+
+  try {
+    // 1) Если есть новый файл — заливаем в /api/admin/teachers/:id/upload (field: file)
+    let uploadedUrl: string | null = null;
     if (photoFile) {
-      formData.append("photo", photoFile);
+      const fd = new FormData();
+      fd.append('file', photoFile);
+      const up = await fetch(`${API}/admin/teachers/${id}/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: fd,
+      });
+      const upJson = await up.json();
+      if (!up.ok) throw new Error(upJson?.message || 'Ошибка загрузки фото');
+      uploadedUrl = upJson?.url || null;
+
+      // Сохраняем URL в профиле отдельным PATCH
+      if (uploadedUrl) {
+        const patch = await fetch(`${API}/admin/teachers/${id}/photo`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ url: uploadedUrl }),
+        });
+        if (!patch.ok) {
+          const t = await patch.text();
+          throw new Error(t || 'Не удалось сохранить фото преподавателя');
+        }
+      }
     }
+
+    // 2) Собираем JSON-данные и отправляем PUT на /admin/teachers/:id
+    const payload: any = {
+      firstName,
+      lastName,
+      aboutShort,
+      teacherSubjects, // JSON-массив с полями subjectId, price, duration
+    };
+
     const res = await fetch(`${API}/admin/teachers/${id}`, {
-      method: "PUT",
-      credentials: "include",
-      body: formData,
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
     });
-    if (res.ok) {
-      router.push("/admin/teachers");
-    } else {
-      const text = await res.text();
-      setError(text || "Ошибка");
+
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(t || 'Не удалось сохранить изменения');
     }
+
+    // вернуться к списку
+    router.push('/admin/teachers');
+  } catch (err: any) {
+    setError(err?.message || 'Ошибка сохранения');
   }
+}
+
 
   async function handleDelete() {
     if (!id) return;

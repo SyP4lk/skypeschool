@@ -2,7 +2,7 @@
 'use client';
 import { useState } from 'react';
 
-const API = (process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/$/, '');
+const API = '/api';
 
 export default function RegisterPage() {
   const [firstName, setFirst] = useState('');

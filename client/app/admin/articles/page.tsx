@@ -14,7 +14,7 @@ function formatDate(d: string) {
 }
 
 export default function AdminArticlesPage() {
-  const api = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+  const api = '/api';
   const [items, setItems] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
 

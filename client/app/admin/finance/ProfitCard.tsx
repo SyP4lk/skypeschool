@@ -9,14 +9,8 @@ function fmt(kopecks: number) {
 }
 
 // Надёжная база API
-function getApiBase() {
-  const env = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, ''); // напр. http://localhost:3001/api
-  if (env) return env;
-  // Фолбэк для локалки
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname || 'localhost';
-    return `http://${host}:3001/api`;
-  }
+// API base fixed to proxy
+function getApiBase(){ return '/api'; }
   return 'http://localhost:3001/api';
 }
 

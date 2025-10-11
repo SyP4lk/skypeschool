@@ -19,7 +19,7 @@ export default function SubjectSearch({
   const [highlight, setHighlight] = useState(-1);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const ctlRef = useRef<AbortController | null>(null);
-  const base = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/+$/, '');
+  const base = '/api';
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {

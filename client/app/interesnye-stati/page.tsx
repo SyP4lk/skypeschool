@@ -5,7 +5,7 @@ type ListResponse = { items: ArticleCard[]; total: number; page: number; limit: 
 
 const PAGE_SIZE = 12;
 
-const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/+$/, '');
+const API = '/api';
 const ORIGIN = API.replace(/\/api$/, '');
 const toAbs = (p?: string | null) => (!p ? null : p.startsWith('http') ? p : `${ORIGIN}${p.startsWith('/') ? '' : '/'}${p}`);
 

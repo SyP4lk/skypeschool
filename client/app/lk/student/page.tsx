@@ -1,5 +1,5 @@
 'use client';
-const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
+const API = '/api';
 
 import { useEffect, useState } from 'react';
 import { api } from './_lib/api';

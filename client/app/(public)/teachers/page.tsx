@@ -3,7 +3,7 @@ import TeachersClient from './teachers-client';
 
 export const dynamic = 'force-dynamic'; // форсим серверный рендер по каждому запросу
 
-const API = (process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/+$/, '');
+const API = '/api';
 
 type Category = { id: string; name: string };
 type Subject   = { id: string; name: string; categoryId?: string | null; minPrice?: number | null; minDuration?: number | null };

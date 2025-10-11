@@ -6,7 +6,7 @@ import { notify } from '@/shared/ui/notify';
 
 type Item = { id: string; title: string; alt: string; icon: string; order?: number };
 
-const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
+const API = '/api';
 
 export default function PopularLessonsAdmin() {
   const [items, setItems] = useState<Item[]>([]);

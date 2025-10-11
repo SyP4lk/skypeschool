@@ -10,7 +10,7 @@ import {
 import styles from './Header.module.css';
 
 type Category = { id: string; name: string };
-const api = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+const api = '/api';
 
 function TeachersDropdown() {
   const [cats, setCats] = useState<Category[]>([]);

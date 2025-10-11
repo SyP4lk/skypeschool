@@ -6,7 +6,7 @@ import Link from 'next/link';
 type Category = { id: string; name: string };
 
 export default function TeachersMenu() {
-  const api = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+  const api = '/api';
   const [cats, setCats] = useState<Category[]>([]);
   const [open, setOpen] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

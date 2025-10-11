@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 export default function AdminNewArticlePage() {
-  const api = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+  const api = '/api';
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');

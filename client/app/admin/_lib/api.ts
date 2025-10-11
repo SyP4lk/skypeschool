@@ -1,34 +1,19 @@
 'use client';
 
-// Универсальная обёртка над админ-API с дженериком и автопрефиксами.
-// Понимает FormData (не проставляет Content-Type), JSON, и прокидывает cookie.
-
+// Единый безопасный хелпер для админ-запросов. Всегда идём через /api на этом же домене,
+// чтобы фронтовая cookie корректно прокидывалась к бэкенду.
 export async function api<T = any>(path: string, init: RequestInit = {}) {
-  // Если явно задан абсолютный урл — используем его как есть.
   const isAbsolute = /^https?:\/\//i.test(path);
+  const base = '/api';
 
-  // База:
-  // - если в NEXT_PUBLIC_API_URL лежит абсолютный URL → используем его (редкий случай)
-  // - иначе всегда шлём через прокси Next на этом же домене: /api
-  const envBase = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
-  const base =
-    envBase && /^https?:\/\//i.test(envBase)
-      ? envBase
-      : '/api';
-
-  // Нормализуем относительный путь, добавляем /admin если нужно
   let rel = path.startsWith('/') ? path : `/${path}`;
-  if (!isAbsolute && !rel.startsWith('/admin/')) {
-    rel = `/admin${rel}`;
-  }
+  if (!isAbsolute && !rel.startsWith('/admin/')) rel = `/admin${rel}`;
 
   const url = isAbsolute ? path : `${base}${rel}`;
 
   const headers = new Headers(init.headers || {});
-  const hasBody = init.body !== undefined;
-  const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData;
-  if (hasBody && !isFormData && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
+  if (!(init.body instanceof FormData) && !headers.has('content-type')) {
+    headers.set('content-type', 'application/json; charset=utf-8');
   }
 
   const res = await fetch(url, {

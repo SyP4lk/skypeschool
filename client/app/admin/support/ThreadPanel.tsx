@@ -1,4 +1,4 @@
-const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
+const API = '/api';
 // PATCH: 2025-09-28
 
 'use client';

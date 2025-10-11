@@ -11,7 +11,7 @@ type TeacherSubject = {
   price: number;    // рубли (или копейки — зависит от бэка; здесь просто число)
 };
 
-const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
+const API = '/api';
 
 export default function Page() {
   const router = useRouter();
@@ -41,7 +41,7 @@ export default function Page() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API}/admin/subjects?limit=1000`, {
+        const res = await fetch(`${API}/subjects?limit=1000`, {
           credentials: 'include',
           cache: 'no-store',
         });
@@ -72,9 +72,9 @@ export default function Page() {
       if (photoFile) formData.append('photo', photoFile);
 
       // Отправляем предметы как JSON (соблюдаем текущий контракт бэка)
-      formData.append('subjects', JSON.stringify(teacherSubjects));
+      formData.append('teacherSubjects', JSON.stringify(teacherSubjects));
 
-      const res = await fetch(`${API}/admin/teachers`, {
+      const res = await fetch(`${API}/teachers`, {
         method: 'POST',
         credentials: 'include',
         body: formData, // НЕ ставим вручную Content-Type

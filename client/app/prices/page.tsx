@@ -9,7 +9,7 @@ type SubjectItem = {
 };
 
 export default function PricesPage() {
-  const api = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+  const api = '/api';
   const [cats, setCats] = useState<Category[]>([]);
   const [active, setActive] = useState<string | 'all'>('all');
   const [items, setItems] = useState<SubjectItem[]>([]);
