@@ -1,0 +1,254 @@
+/*
+ * Styles for the site header. Responsive/accessible.
+ */
+
+.header {
+  width: 100%;
+  background-color: #fff;
+  border-bottom: 1px solid #e5e5e5;
+  z-index: 100;
+  position: relative;
+}
+
+.menuItem { position: relative; }
+
+/* Flex-контейнер */
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 64px;
+  position: relative;
+}
+
+/* Логотип по центру (десктоп) */
+.logo {
+  position: absolute;
+  top: 1px;
+  left: 50%;
+  width: 150px;
+  height: 170px;
+  margin-left: -100px;
+  background: #fff;
+  border-radius: 50%;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+.logo img { max-width: 100%; max-height: 100%; border-radius: 30%;}
+
+/* Гало */
+.logo::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 240px;
+  height: 240px;
+  margin-top: -120px;
+  margin-left: -120px;
+  border-radius: 50%;
+  border: 1px solid #fff;
+  opacity: 0.4;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Списки */
+.leftNavList,
+.rightNavList {
+  display: flex;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  gap: 1.5rem;
+  flex: 1;
+  justify-content: flex-start;
+}
+.rightNavList { justify-content: flex-end; }
+
+.navItem { position: relative; }
+
+.navLink {
+  text-decoration: none;
+  color: #1a1a1a;
+  font-weight: 600;
+  padding: 10px 12px;
+}
+.navLink:hover,
+.navLink:focus { color: #00aecd; }
+
+/* Дропдауны (десктоп) */
+.dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #f0f0f0;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.08);
+  padding: 10px 0;
+  min-width: 260px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px);
+  transition: opacity .15s ease, transform .15s ease, visibility .15s;
+  pointer-events: none;
+  z-index: 30;
+}
+.menuItem:hover > .dropdown,
+.menuItem:focus-within > .dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.dropdown.open { display: block; }
+.dropdownList { list-style: none; margin: 0; padding: 0; }
+.dropdownItem { margin: 0; }
+.dropdownLink {
+  text-decoration: none;
+  color: #333;
+  display: block;
+}
+.dropdownLink:hover,
+.dropdownLink:focus { color: #00aecd; }
+
+.secondaryNavList { display: none; }
+
+/* Вход */
+.signIn {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  text-decoration: none;
+  color: #1a1a1a;
+  font-weight: 600;
+}
+.signIn:hover,
+.signIn:focus { color: #00aecd; }
+.loginCircle {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #00c3e3;
+}
+
+/* ====== ДОБАВЛЕНО: мобильная кнопка/режим ====== */
+
+/* Бургер (скрыт на десктопе) */
+.mobileToggle {
+  display: none;
+  background: none;
+  border: 0;
+  padding: 8px;
+  margin-right: .5rem;
+  cursor: pointer;
+}
+.burger {
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: #1a1a1a;
+  position: relative;
+  border-radius: 2px;
+}
+.burger::before,
+.burger::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: #1a1a1a;
+  border-radius: 2px;
+}
+.burger::before { top: -7px; }
+.burger::after { top: 7px; }
+
+.srOnly {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ====== АДАПТИВ: мобильные стили ====== */
+@media (max-width: 768px) {
+  /* колоночная раскладка */
+  .container {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0.5rem 1rem;
+    min-height: 56px;
+  }
+
+  /* показать бургер */
+  .mobileToggle { display: inline-flex; align-self: flex-end; }
+
+  /* уменьшить/отвязать логотип */
+  .logo {
+    position: static;
+    width: 96px;
+    height: 96px;
+    margin: 8px auto 10px auto;
+    padding: 0;
+  }
+  .logo::after { display: none; }
+
+  /* изначально меню скрыто */
+  .leftNavList,
+  .rightNavList {
+    display: none;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+  }
+
+  /* когда header имеет класс .open — показываем меню */
+  .header.open .leftNavList,
+  .header.open .rightNavList {
+    display: flex;
+  }
+
+  /* дропдауны упрощаем в обычные вложенные списки */
+  .dropdown {
+    position: static;
+    border: 0;
+    box-shadow: none;
+    padding: 0 0 6px 10px;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .navLink { padding: 8px 0; display: block; }
+}
+
+
+/* --- HeroUI dropdown alignment helpers --- */
+.leftNavList, .rightNavList { display: flex; align-items: center; gap: 8px; }
+.navLink { display: inline-flex; align-items: center; line-height: 1; }
+
+/* ensure header over content and consistent alignment */
+.header { z-index: 50; position: relative; }
+
+.leftNavList, .rightNavList {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+

@@ -1,0 +1,45 @@
+# node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-lock.yaml
+
+# build
+client/.next/
+client/out/
+client/.turbo/
+server/dist/
+server/.tsbuildinfo
+
+# env & secrets
+.env
+.env.*.local
+.env.local
+.env.* 
+!.env.example
+client/.env.local
+server/.env
+server/.env.*.local
+prisma/.env
+
+# uploads (не храним в гите)
+server/public/uploads/
+server/uploads/
+server/storage/
+# misc
+.DS_Store
+*.swp
+*.log
+.vercel
+.netlify
+# temp / logs
+server/cookies.txt
+server/routes.log
+server/npm
+*.zip
+
+# uploads/runtime data
+server/uploads/
+server/storage/
+server/public/uploads/
